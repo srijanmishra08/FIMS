@@ -1,0 +1,359 @@
+{% extends "base.html" %}
+
+{% block title %}Create Builty - FIMS{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('rakepoint_dashboard') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Dashboard
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h4 class="mb-0"><i class="bi bi-file-earmark-plus"></i> Create Builty (Goods Transport Receipt)</h4>
+        <small>Select loading slip → Auto-fills everything → Just add freight & LR number</small>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('rakepoint_create_builty') }}">
+            
+            <!-- STEP 1: Select Loading Slip -->
+            <div class="alert alert-warning border-start border-4 border-warning">
+                <h5><i class="bi bi-receipt"></i> Step 1: Select Loading Slip</h5>
+                <p class="mb-0">All details will be auto-filled from the loading slip. Use the search box to filter loading slips.</p>
+            </div>
+            
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <label for="loading_slip_search" class="form-label fw-bold">Search Loading Slip</label>
+                    <input type="text" class="form-control mb-2" id="loading_slip_search" placeholder="🔍 Type to search by Slip #, Rake Code, Truck No, Driver name...">
+                    
+                    <label for="loading_slip_id" class="form-label fw-bold">Select Loading Slip <span class="text-danger">*</span></label>
+                    <select class="form-select form-select-lg" id="loading_slip_id" name="loading_slip_id" required>
+                        <option value="">-- Choose a Loading Slip --</option>
+                        {% if loading_slips %}
+                            {% for slip in loading_slips %}
+                            <option value="{{ slip[0] }}" 
+                                    data-rake-code="{{ slip[1] }}"
+                                    data-slip-number="{{ slip[2] }}"
+                                    data-loading-point="{{ slip[3] }}"
+                                    data-destination="{{ slip[4] }}"
+                                    data-account="{{ slip[5] }}"
+                                    data-wagon="{{ slip[6] }}"
+                                    data-bags="{{ slip[7] }}"
+                                    data-quantity-mt="{{ slip[8] }}"
+                                    data-truck="{{ slip[9] }}"
+                                    data-goods="{{ slip[10] }}"
+                                    data-driver="{{ slip[11] }}"
+                                    data-owner="{{ slip[12] }}"
+                                    data-mobile1="{{ slip[13] }}"
+                                    data-mobile2="{{ slip[14] }}"
+                                    data-account-id="{{ slip[15] or '' }}"
+                                    data-warehouse-id="{{ slip[16] or '' }}"
+                                    data-cgmf-id="{{ slip[17] or '' }}"
+                                    data-search-text="Slip #{{ slip[2] }} {{ slip[1] }} {{ slip[8] }} MT Truck: {{ slip[9] }} Driver: {{ slip[11] }}">
+                                Slip #{{ slip[2] }} | {{ slip[1] }} | {{ slip[8] }} MT | Truck: {{ slip[9] }} | Driver: {{ slip[11] }}
+                            </option>
+                            {% endfor %}
+                        {% else %}
+                            <option value="" disabled>⚠️ No loading slips available - Please create a loading slip first!</option>
+                        {% endif %}
+                    </select>
+                    <small class="text-muted">Type in the search box above to filter loading slips</small>
+                </div>
+            </div>
+
+            <hr class="my-4">
+
+            <!-- AUTO-FILLED DATA (Read-Only Display) -->
+            <div id="auto-filled-section" style="display: none;">
+                <div class="alert alert-success border-start border-4 border-success">
+                    <h5><i class="bi bi-check-circle"></i> Auto-Filled Data from Loading Slip</h5>
+                    <p class="mb-0">Review the details below (auto-populated)</p>
+                </div>
+
+                <!-- Hidden Fields for Submission -->
+                <input type="hidden" id="rake_code" name="rake_code">
+                <input type="hidden" id="loading_point" name="loading_point">
+                <input type="hidden" id="unloading_point" name="unloading_point">
+                <input type="hidden" id="account_warehouse" name="account_warehouse">
+                <input type="hidden" id="slip_account_id" name="slip_account_id">
+                <input type="hidden" id="slip_warehouse_id" name="slip_warehouse_id">
+                <input type="hidden" id="slip_cgmf_id" name="slip_cgmf_id">
+                <input type="hidden" id="goods_name" name="goods_name">
+                <input type="hidden" id="number_of_bags" name="number_of_bags">
+                <input type="hidden" id="quantity_wt_mt" name="quantity_wt_mt">
+                <input type="hidden" id="truck_number" name="truck_number">
+                <input type="hidden" id="truck_driver" name="truck_driver">
+                <input type="hidden" id="truck_owner" name="truck_owner">
+                <input type="hidden" id="mobile_number_1" name="mobile_number_1">
+                <input type="hidden" id="mobile_number_2" name="mobile_number_2">
+                <input type="hidden" id="rake_point_name" name="rake_point_name">
+
+                <!-- Display Auto-Filled Data in Cards -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="text-muted mb-3">📦 Goods Details</h6>
+                                <p class="mb-1"><strong>Goods Name:</strong> <span id="display_goods_name" class="text-primary"></span></p>
+                                <p class="mb-1"><strong>Quantity:</strong> <span id="display_bags" class="text-primary"></span> bags</p>
+                                <p class="mb-0"><strong>Weight:</strong> <span id="display_mt" class="text-primary"></span> MT</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="text-muted mb-3">🚚 Truck & Driver Details</h6>
+                                <p class="mb-1"><strong>Truck Number:</strong> <span id="display_truck" class="text-primary"></span></p>
+                                <p class="mb-1"><strong>Driver:</strong> <span id="display_driver" class="text-primary"></span></p>
+                                <p class="mb-0"><strong>Owner:</strong> <span id="display_owner" class="text-primary"></span></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="text-muted mb-3">📍 Route Details</h6>
+                                <p class="mb-1"><strong>From:</strong> <span id="display_loading" class="text-primary"></span></p>
+                                <p class="mb-0"><strong>To:</strong> <span id="display_destination" class="text-primary"></span></p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="text-muted mb-3">📞 Contact Details</h6>
+                                <p class="mb-1"><strong>Mobile 1:</strong> <span id="display_mobile1" class="text-primary"></span></p>
+                                <p class="mb-0"><strong>Mobile 2:</strong> <span id="display_mobile2" class="text-primary"></span></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- STEP 2: Enter Required Fields Only -->
+                <div class="alert alert-info border-start border-4 border-info">
+                    <h5><i class="bi bi-pencil-square"></i> Step 2: Add Freight & LR Details</h5>
+                    <p class="mb-0">Enter the freight amount and LR number below</p>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="builty_date" class="form-label fw-bold">Builty Date <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control form-control-lg" id="builty_date" name="builty_date" required>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        <label for="lr_number" class="form-label fw-bold">LR Number <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control form-control-lg" id="lr_number" name="lr_number" required placeholder="Auto-generated" readonly>
+                        <small class="text-muted">Automatically generated sequential LR number</small>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label for="rate_per_mt" class="form-label fw-bold">Rate per MT <span class="text-danger">*</span></label>
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text">₹</span>
+                            <input type="number" step="0.01" class="form-control" id="rate_per_mt" name="rate_per_mt" required placeholder="Enter rate per MT">
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-3 mb-3">
+                        <label for="freight_details" class="form-label fw-bold">Total Freight <span class="text-danger">*</span></label>
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text">₹</span>
+                            <input type="number" step="0.01" class="form-control" id="freight_details" name="freight_details" required placeholder="0.00" readonly>
+                        </div>
+                        <small class="text-muted">Rate × Quantity</small>
+                    </div>
+                    
+                    <div class="col-md-3 mb-3">
+                        <label for="freight_advance" class="form-label fw-bold">Advance</label>
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text">₹</span>
+                            <input type="number" step="0.01" class="form-control" id="freight_advance" name="freight_advance" placeholder="0.00" value="0">
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-3 mb-3">
+                        <label for="to_pay" class="form-label fw-bold">To Pay</label>
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text">₹</span>
+                            <input type="number" step="0.01" class="form-control bg-warning bg-opacity-25" id="to_pay" name="to_pay" placeholder="0.00" readonly>
+                        </div>
+                        <small class="text-muted">Total - Advance</small>
+                    </div>
+                </div>
+
+                <!-- Sub Head Section -->
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <label for="sub_head" class="form-label fw-bold"><i class="bi bi-tag"></i> Sub Head</label>
+                        <input type="text" class="form-control form-control-lg" id="sub_head" name="sub_head" placeholder="Enter sub head (optional)">
+                        <small class="text-muted">Additional categorization for this builty</small>
+                    </div>
+                </div>
+
+                <!-- Receiver Details Section -->
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="receiver_name" class="form-label fw-bold"><i class="bi bi-person-check"></i> Receiver Name</label>
+                        <input type="text" class="form-control form-control-lg" id="receiver_name" name="receiver_name" placeholder="Enter receiver name (optional)">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="received_quantity" class="form-label fw-bold"><i class="bi bi-box-seam"></i> Received Quantity (MT)</label>
+                        <input type="number" step="0.01" class="form-control form-control-lg" id="received_quantity" name="received_quantity" placeholder="Enter received quantity (optional)">
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <div class="d-flex justify-content-end gap-2">
+                    <a href="{{ url_for('rakepoint_dashboard') }}" class="btn btn-secondary btn-lg">
+                        <i class="bi bi-x-circle"></i> Cancel
+                    </a>
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="bi bi-check-circle"></i> Create Builty
+                    </button>
+                </div>
+            </div>
+
+            <!-- Show message when no loading slip selected -->
+            <div id="no-selection-message">
+                <div class="alert alert-info text-center">
+                    <i class="bi bi-info-circle fs-1"></i>
+                    <h5 class="mt-3">Please select a loading slip above to continue</h5>
+                    <p class="mb-0">All builty details will be auto-filled from the loading slip</p>
+                </div>
+            </div>
+
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Set today's date as default and fetch next LR number
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('builty_date').valueAsDate = new Date();
+    
+    // Fetch next LR number
+    fetch('/api/next-lr-number')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('lr_number').value = data.next_lr;
+            document.getElementById('lr_number').classList.add('bg-light');
+        })
+        .catch(error => {
+            console.error('Error fetching LR number:', error);
+        });
+    
+    // Store all original options for search functionality
+    var loadingSlipSelect = document.getElementById('loading_slip_id');
+    window.allLoadingSlipOptions = Array.from(loadingSlipSelect.options);
+});
+
+// Loading Slip Search functionality
+document.getElementById('loading_slip_search').addEventListener('input', function() {
+    var searchText = this.value.toLowerCase().trim();
+    var loadingSlipSelect = document.getElementById('loading_slip_id');
+    
+    // Clear current options except the first "Choose" option
+    loadingSlipSelect.innerHTML = '';
+    
+    // Add back filtered options
+    window.allLoadingSlipOptions.forEach(function(option) {
+        if (option.value === '' || 
+            (option.dataset.searchText && option.dataset.searchText.toLowerCase().includes(searchText)) ||
+            option.text.toLowerCase().includes(searchText)) {
+            loadingSlipSelect.appendChild(option.cloneNode(true));
+        }
+    });
+});
+
+// AUTO-FILL FROM LOADING SLIP - Show/hide sections and populate data
+document.getElementById('loading_slip_id').addEventListener('change', function() {
+    var selectedOption = this.options[this.selectedIndex];
+    
+    if (selectedOption.value) {
+        // Show auto-filled section, hide no-selection message
+        document.getElementById('auto-filled-section').style.display = 'block';
+        document.getElementById('no-selection-message').style.display = 'none';
+        
+        // Auto-fill ALL hidden fields from loading slip data attributes
+        document.getElementById('rake_code').value = selectedOption.getAttribute('data-rake-code') || '';
+        document.getElementById('loading_point').value = selectedOption.getAttribute('data-loading-point') || '';
+        document.getElementById('unloading_point').value = selectedOption.getAttribute('data-destination') || '';
+        document.getElementById('account_warehouse').value = selectedOption.getAttribute('data-account') || '';
+        
+        // Pass the actual IDs from loading slip for direct use in builty creation
+        document.getElementById('slip_account_id').value = selectedOption.getAttribute('data-account-id') || '';
+        document.getElementById('slip_warehouse_id').value = selectedOption.getAttribute('data-warehouse-id') || '';
+        document.getElementById('slip_cgmf_id').value = selectedOption.getAttribute('data-cgmf-id') || '';
+        
+        document.getElementById('number_of_bags').value = selectedOption.getAttribute('data-bags') || '';
+        document.getElementById('quantity_wt_mt').value = selectedOption.getAttribute('data-quantity-mt') || '';
+        document.getElementById('truck_number').value = selectedOption.getAttribute('data-truck') || '';
+        document.getElementById('goods_name').value = selectedOption.getAttribute('data-goods') || '';
+        document.getElementById('truck_driver').value = selectedOption.getAttribute('data-driver') || '';
+        document.getElementById('truck_owner').value = selectedOption.getAttribute('data-owner') || '';
+        document.getElementById('mobile_number_1').value = selectedOption.getAttribute('data-mobile1') || '';
+        document.getElementById('mobile_number_2').value = selectedOption.getAttribute('data-mobile2') || '';
+        document.getElementById('rake_point_name').value = 'Rake Point - ' + selectedOption.getAttribute('data-rake-code');
+        
+        // Update display fields in cards
+        document.getElementById('display_goods_name').textContent = selectedOption.getAttribute('data-goods') || 'N/A';
+        document.getElementById('display_bags').textContent = selectedOption.getAttribute('data-bags') || '0';
+        document.getElementById('display_mt').textContent = selectedOption.getAttribute('data-quantity-mt') || '0';
+        document.getElementById('display_truck').textContent = selectedOption.getAttribute('data-truck') || 'N/A';
+        document.getElementById('display_driver').textContent = selectedOption.getAttribute('data-driver') || 'N/A';
+        document.getElementById('display_owner').textContent = selectedOption.getAttribute('data-owner') || 'N/A';
+        document.getElementById('display_loading').textContent = selectedOption.getAttribute('data-loading-point') || 'N/A';
+        document.getElementById('display_destination').textContent = selectedOption.getAttribute('data-destination') || 'N/A';
+        document.getElementById('display_mobile1').textContent = selectedOption.getAttribute('data-mobile1') || 'N/A';
+        document.getElementById('display_mobile2').textContent = selectedOption.getAttribute('data-mobile2') || '-';
+        
+        // Scroll to the form
+        document.getElementById('auto-filled-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+        // Hide auto-filled section, show no-selection message
+        document.getElementById('auto-filled-section').style.display = 'none';
+        document.getElementById('no-selection-message').style.display = 'block';
+    }
+});
+
+// Auto-calculate total freight when rate per MT is entered
+document.getElementById('rate_per_mt').addEventListener('input', function() {
+    var rate = parseFloat(this.value) || 0;
+    var quantity = parseFloat(document.getElementById('quantity_wt_mt').value) || 0;
+    if (quantity > 0 && rate > 0) {
+        var totalFreight = (rate * quantity).toFixed(2);
+        document.getElementById('freight_details').value = totalFreight;
+        calculateToPay();
+    } else {
+        document.getElementById('freight_details').value = '0.00';
+        calculateToPay();
+    }
+});
+
+// Auto-calculate To Pay when advance is entered
+document.getElementById('freight_advance').addEventListener('input', function() {
+    calculateToPay();
+});
+
+function calculateToPay() {
+    var totalFreight = parseFloat(document.getElementById('freight_details').value) || 0;
+    var advance = parseFloat(document.getElementById('freight_advance').value) || 0;
+    var toPay = (totalFreight - advance).toFixed(2);
+    document.getElementById('to_pay').value = toPay;
+}
+</script>
+{% endblock %}

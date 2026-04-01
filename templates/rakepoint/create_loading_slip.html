@@ -1,0 +1,697 @@
+{% extends "base.html" %}
+
+{% block title %}Create Loading Slip - FIMS{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('rakepoint_dashboard') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Dashboard
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header bg-success text-white">
+        <h4 class="mb-0"><i class="bi bi-receipt"></i> Create Loading Slip</h4>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('rakepoint_create_loading_slip') }}">
+            <!-- Rake Balance Alert (hidden by default) -->
+            <div id="rake-balance-alert" class="alert alert-info" style="display: none;">
+                <h6 class="mb-2"><i class="bi bi-info-circle"></i> Rake Quantity Status</h6>
+                <div class="row">
+                    <div class="col-md-4">
+                        <strong>Total:</strong> <span id="rake-total">0</span> MT
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Dispatched:</strong> <span id="rake-dispatched">0</span> MT
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Remaining:</strong> <span id="rake-remaining" class="text-success fw-bold">0</span> MT
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="rake_code" class="form-label">Rake Code <span class="text-danger">*</span></label>
+                    <select class="form-select" id="rake_code" name="rake_code" required>
+                        <option value="">Select Rake</option>
+                        {% for rake in rakes %}
+                        <option value="{{ rake[1] }}" 
+                                data-company="{{ rake[2] }}"
+                                data-product="{{ rake[6] }}"
+                                data-rakepoint="{{ rake[8] }}"
+                                data-total="{{ rake[5] }}">
+                            {{ rake[1] }} - {{ rake[2] }} ({{ "%.2f"|format(rake[5]) }} MT)
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted">Product and loading point will auto-fill when rake is selected</small>
+                </div>
+                
+                <!-- Product Selection (shown when rake has multiple products) -->
+                <div class="col-md-6 mb-3" id="product_select_container" style="display: none;">
+                    <label for="selected_product" class="form-label">Select Product <span class="text-danger">*</span></label>
+                    <select class="form-select" id="selected_product" name="selected_product">
+                        <option value="">Select Product</option>
+                    </select>
+                    <small class="text-muted">This rake has multiple products. Select one.</small>
+                </div>
+                
+                <div class="col-md-6 mb-3" id="serial_number_container">
+                    <label for="serial_number" class="form-label">Serial Number (S.No) <span class="text-danger">*</span></label>
+                    <input type="number" class="form-control" id="serial_number" name="serial_number" required placeholder="Auto-generated" readonly>
+                    <small class="text-muted">Automatically generated based on rake selection</small>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="loading_point" class="form-label">Loading Point <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="loading_point" name="loading_point" required placeholder="Auto-filled from rake" readonly>
+                    <small class="text-muted">Auto-filled from rake details (cannot be changed)</small>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="destination" class="form-label">Destination <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="destination" name="destination" required placeholder="Enter destination">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="account" class="form-label">Dispatch To (Account/Warehouse) <span class="text-danger">*</span></label>
+                    <div class="position-relative">
+                        <input type="text" class="form-control" id="account_search" placeholder="🔍 Type to search accounts, warehouses..." autocomplete="off">
+                        <div id="account_dropdown" class="dropdown-menu w-100" style="max-height: 300px; overflow-y: auto; display: none;">
+                            <h6 class="dropdown-header bg-light">👥 Accounts (Dealers/Retailers)</h6>
+                            {% for account in accounts %}
+                            <a class="dropdown-item account-option" href="#" data-value="{{ account[1] }}" data-type="{{ account[2] }}" data-address="{{ account[4] }}">
+                                {{ account[1] }} <small class="text-muted">- {{ account[2] }}</small>
+                            </a>
+                            {% endfor %}
+                            <div class="dropdown-divider"></div>
+                            <h6 class="dropdown-header bg-light">🏢 Warehouses</h6>
+                            {% for warehouse in warehouses %}
+                            <a class="dropdown-item account-option" href="#" data-value="{{ warehouse[1] }}" data-type="Warehouse">
+                                {{ warehouse[1] }} <small class="text-muted">- Warehouse</small>
+                            </a>
+                            {% endfor %}
+                            {% if cgmf_list %}
+                            <div class="dropdown-divider"></div>
+                            <h6 class="dropdown-header bg-light">🏛️ CGMF (CG Markfed)</h6>
+                            {% for cgmf in cgmf_list %}
+                            <a class="dropdown-item account-option" href="#" data-value="CGMF:{{ cgmf[0] }}" data-type="CGMF">
+                                {{ cgmf[3] }} <small class="text-muted">- {{ cgmf[1] }} ({{ cgmf[2] }})</small>
+                            </a>
+                            {% endfor %}
+                            {% endif %}
+                        </div>
+                        <input type="hidden" id="account" name="account" required>
+                    </div>
+                    <small class="text-muted">Type to search or click to select from dropdown</small>
+                </div>
+                
+                <!-- Sub Head field (shown only for Payal accounts) -->
+                <div class="col-md-6 mb-3" id="sub_head_container" style="display: none;">
+                    <label for="sub_head" class="form-label">Sub Head <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="sub_head" name="sub_head" placeholder="Enter sub head for Payal account">
+                    <small class="text-muted">Required for Payal accounts</small>
+                </div>
+                
+                <div class="col-md-6 mb-3" id="wagon_container">
+                    <label for="wagon_number" class="form-label">Wagon Number <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="wagon_number" name="wagon_number" required placeholder="Enter wagon number">
+                </div>
+            </div>
+            
+            <!-- Warehouse Account Type Section (shown only when warehouse is selected) -->
+            <div id="warehouse_account_section" style="display: none;">
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle"></i> <strong>Account Stock Tracking:</strong> Select whose stock is being stored in the warehouse
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label for="warehouse_account_type" class="form-label">Account Type <span class="text-danger">*</span></label>
+                        <select class="form-select" id="warehouse_account_type" name="warehouse_account_type" onchange="filterWarehouseAccounts()">
+                            <option value="">-- Select Account Type --</option>
+                            <option value="Company">Company</option>
+                            <option value="Dealer">Dealers</option>
+                            <option value="Payal">Payal</option>
+                            <option value="Retailer">Retailers</option>
+                        </select>
+                    </div>
+                    <div class="col-md-8 mb-3">
+                        <label for="warehouse_account_id" class="form-label">Account <span class="text-danger">*</span></label>
+                        <select class="form-select" id="warehouse_account_id" name="warehouse_account_id">
+                            <option value="">-- First select account type --</option>
+                        </select>
+                        <small class="text-muted">Select the account whose stock will be stored in the warehouse</small>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="quantity_in_bags" class="form-label">Quantity in Bags <span class="text-danger">*</span></label>
+                    <input type="number" class="form-control" id="quantity_in_bags" name="quantity_in_bags" required placeholder="Enter quantity">
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label for="quantity_in_mt" class="form-label">Quantity in MT <span class="text-danger">*</span></label>
+                    <input type="number" step="0.01" class="form-control" id="quantity_in_mt" name="quantity_in_mt" required placeholder="0.00">
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label for="truck_number" class="form-label">Truck Number <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="truck_number" name="truck_number" required placeholder="Enter truck number">
+                </div>
+            </div>
+            
+            <!-- Truck & Driver Details Section -->
+            <div class="alert alert-info mt-3">
+                <i class="bi bi-truck"></i> <strong>Truck & Driver Details</strong> (Will auto-fill in Builty)
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="truck_driver" class="form-label">Truck Driver Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="truck_driver" name="truck_driver" required placeholder="Enter driver name">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="truck_owner" class="form-label">Truck Owner <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="truck_owner" name="truck_owner" required placeholder="Enter owner name">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="mobile_number_1" class="form-label">Mobile Number 1 <span class="text-danger">*</span></label>
+                    <input type="tel" class="form-control" id="mobile_number_1" name="mobile_number_1" required placeholder="Enter mobile number">
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label for="mobile_number_2" class="form-label">Mobile Number 2</label>
+                    <input type="tel" class="form-control" id="mobile_number_2" name="mobile_number_2" placeholder="Optional">
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label for="goods_name" class="form-label">Goods Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="goods_name" name="goods_name" required placeholder="Auto-filled from rake" readonly>
+                    <small class="text-muted">Auto-filled from rake product (cannot be changed)</small>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-12 mb-3">
+                    <label for="truck_details" class="form-label">Additional Truck/Transport Details</label>
+                    <textarea class="form-control" id="truck_details" name="truck_details" rows="2" placeholder="Any additional information"></textarea>
+                </div>
+            </div>
+            
+            <hr class="my-4">
+            
+            <div class="d-flex justify-content-end gap-2">
+                <a href="{{ url_for('rakepoint_dashboard') }}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" name="action" value="save" class="btn btn-success">
+                    <i class="bi bi-save"></i> Save Loading Slip
+                </button>
+                <button type="submit" name="action" value="print" class="btn btn-primary">
+                    <i class="bi bi-printer"></i> Save & Print
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentRakeBalance = null;
+let currentUnitPerBag = 50; // Default value, will be updated when rake is selected
+let currentRakeProducts = []; // Store products for selected rake
+
+// Auto-calculate MT from bags using product's unit_per_bag
+document.getElementById('quantity_in_bags').addEventListener('input', function() {
+    const bags = parseFloat(this.value) || 0;
+    const mt = (bags * currentUnitPerBag) / 1000;
+    document.getElementById('quantity_in_mt').value = mt.toFixed(2);
+    
+    // Validate against rake remaining quantity
+    validateQuantity(mt);
+});
+
+// Validate quantity against rake balance
+document.getElementById('quantity_in_mt').addEventListener('input', function() {
+    validateQuantity(parseFloat(this.value) || 0);
+});
+
+function validateQuantity(quantity) {
+    if (currentRakeBalance && quantity > 0) {
+        const remaining = currentRakeBalance.remaining;
+        const quantityField = document.getElementById('quantity_in_mt');
+        
+        if (quantity > remaining) {
+            quantityField.classList.add('border-danger');
+            quantityField.classList.remove('border-success');
+            alert(`Error: Quantity exceeds remaining rake balance!\nRemaining: ${remaining.toFixed(2)} MT\nRequested: ${quantity.toFixed(2)} MT`);
+        } else {
+            quantityField.classList.remove('border-danger');
+            quantityField.classList.add('border-success');
+        }
+    }
+}
+
+// Auto-fill goods name and loading point from rake selection
+document.getElementById('rake_code').addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex];
+    const rakeCode = this.value;
+    
+    // Get data attributes (fallback values from rakes table)
+    const fallbackProduct = selectedOption.getAttribute('data-product');
+    const rakePoint = selectedOption.getAttribute('data-rakepoint');
+    
+    const goodsField = document.getElementById('goods_name');
+    const loadingField = document.getElementById('loading_point');
+    const serialField = document.getElementById('serial_number');
+    const balanceAlert = document.getElementById('rake-balance-alert');
+    const productSelectContainer = document.getElementById('product_select_container');
+    const productSelect = document.getElementById('selected_product');
+    const serialContainer = document.getElementById('serial_number_container');
+    
+    console.log('Elements found:', {
+        goodsField: !!goodsField,
+        productSelectContainer: !!productSelectContainer,
+        productSelect: !!productSelect,
+        serialContainer: !!serialContainer
+    });
+    
+    // Auto-fill loading point
+    if (rakePoint) {
+        loadingField.value = rakePoint;
+        loadingField.classList.add('bg-light', 'border-success');
+    }
+    
+    // Fetch next serial number
+    if (rakeCode) {
+        fetch(`/api/next-serial-number/${encodeURIComponent(rakeCode)}`)
+            .then(response => response.json())
+            .then(data => {
+                serialField.value = data.next_serial;
+                serialField.classList.add('bg-light', 'border-success');
+            })
+            .catch(error => {
+                console.error('Error fetching serial number:', error);
+            });
+    }
+    
+    // Fetch rake products
+    if (rakeCode) {
+        fetch(`/api/rake-products/${encodeURIComponent(rakeCode)}`)
+            .then(response => response.json())
+            .then(data => {
+                console.log('Rake Products API Response:', data);
+                currentRakeProducts = data.products || [];
+                console.log('Products count:', currentRakeProducts.length);
+                
+                if (currentRakeProducts.length > 1) {
+                    // Multiple products - show dropdown
+                    productSelectContainer.style.display = 'block';
+                    productSelect.required = true;
+                    
+                    // Clear all existing options
+                    productSelect.length = 0;
+                    
+                    // Add placeholder option using Option constructor
+                    productSelect.add(new Option('Select Product', ''));
+                    
+                    // Add product options
+                    currentRakeProducts.forEach((product, index) => {
+                        console.log('Adding product:', index, product.product_name);
+                        const optionText = `${product.product_name} (${product.product_code || 'N/A'}) - ${product.quantity_mt} MT`;
+                        const opt = new Option(optionText, index.toString());
+                        opt.dataset.productName = product.product_name;
+                        opt.dataset.productCode = product.product_code || '';
+                        opt.dataset.unitPerBag = product.unit_per_bag || 50;
+                        productSelect.add(opt);
+                    });
+                    
+                    console.log('Select now has', productSelect.length, 'options');
+                    
+                    // Adjust layout - get element reference first before modifying
+                    const rakeCodeCol = document.getElementById('rake_code').closest('[class*="col-md-"]');
+                    if (rakeCodeCol) {
+                        rakeCodeCol.classList.remove('col-md-6');
+                        rakeCodeCol.classList.add('col-md-4');
+                    }
+                    productSelectContainer.classList.remove('col-md-6');
+                    productSelectContainer.classList.add('col-md-4');
+                    serialContainer.classList.remove('col-md-6');
+                    serialContainer.classList.add('col-md-4');
+                    
+                    // Clear goods field until product is selected
+                    goodsField.value = '';
+                    goodsField.classList.remove('bg-light', 'border-success');
+                    
+                } else if (currentRakeProducts.length === 1) {
+                    // Single product - auto-fill and hide dropdown
+                    productSelectContainer.style.display = 'none';
+                    productSelect.required = false;
+                    
+                    const product = currentRakeProducts[0];
+                    goodsField.value = product.product_name;
+                    goodsField.classList.add('bg-light', 'border-success');
+                    currentUnitPerBag = product.unit_per_bag || 50;
+                    
+                    // Reset layout
+                    resetLayoutColumns();
+                    
+                } else {
+                    // No products found - use fallback
+                    productSelectContainer.style.display = 'none';
+                    productSelect.required = false;
+                    
+                    if (fallbackProduct) {
+                        goodsField.value = fallbackProduct;
+                        goodsField.classList.add('bg-light', 'border-success');
+                    }
+                    currentUnitPerBag = 50;
+                    
+                    // Reset layout
+                    resetLayoutColumns();
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching rake products:', error);
+                // Fallback to old behavior
+                if (fallbackProduct) {
+                    goodsField.value = fallbackProduct;
+                    goodsField.classList.add('bg-light', 'border-success');
+                }
+                productSelectContainer.style.display = 'none';
+            });
+    }
+    
+    // Fetch and display rake balance
+    if (rakeCode) {
+        fetch(`/api/rake-balance/${encodeURIComponent(rakeCode)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (!data.error) {
+                    currentRakeBalance = data;
+                    
+                    // Update balance display
+                    document.getElementById('rake-total').textContent = data.total.toFixed(2);
+                    document.getElementById('rake-dispatched').textContent = data.dispatched.toFixed(2);
+                    document.getElementById('rake-remaining').textContent = data.remaining.toFixed(2);
+                    
+                    // Show balance alert
+                    balanceAlert.style.display = 'block';
+                    
+                    // Color code remaining quantity
+                    const remainingSpan = document.getElementById('rake-remaining');
+                    if (data.remaining <= 0) {
+                        remainingSpan.classList.remove('text-success');
+                        remainingSpan.classList.add('text-danger');
+                    } else if (data.remaining < data.total * 0.2) {
+                        remainingSpan.classList.remove('text-success');
+                        remainingSpan.classList.add('text-warning');
+                    } else {
+                        remainingSpan.classList.add('text-success');
+                        remainingSpan.classList.remove('text-danger', 'text-warning');
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching rake balance:', error);
+            });
+    } else {
+        // Clear fields and hide balance if "Select Rake" option is chosen
+        goodsField.value = '';
+        loadingField.value = '';
+        serialField.value = '';
+        goodsField.classList.remove('bg-light', 'border-success');
+        loadingField.classList.remove('bg-light', 'border-success');
+        serialField.classList.remove('bg-light', 'border-success');
+        balanceAlert.style.display = 'none';
+        currentRakeBalance = null;
+        currentUnitPerBag = 50; // Reset to default
+        currentRakeProducts = [];
+        
+        // Hide product dropdown and reset layout
+        productSelectContainer.style.display = 'none';
+        productSelect.required = false;
+        resetLayoutColumns();
+    }
+});
+
+// Handle product selection change
+document.getElementById('selected_product').addEventListener('change', function() {
+    const selectedIndex = this.value;
+    const goodsField = document.getElementById('goods_name');
+    
+    if (selectedIndex !== '' && currentRakeProducts[selectedIndex]) {
+        const product = currentRakeProducts[selectedIndex];
+        goodsField.value = product.product_name;
+        goodsField.classList.add('bg-light', 'border-success');
+        currentUnitPerBag = product.unit_per_bag || 50;
+        
+        // Recalculate MT if bags is filled
+        const bags = parseFloat(document.getElementById('quantity_in_bags').value) || 0;
+        if (bags > 0) {
+            const mt = (bags * currentUnitPerBag) / 1000;
+            document.getElementById('quantity_in_mt').value = mt.toFixed(2);
+        }
+    } else {
+        goodsField.value = '';
+        goodsField.classList.remove('bg-light', 'border-success');
+        currentUnitPerBag = 50;
+    }
+});
+
+// Helper function to reset layout columns
+function resetLayoutColumns() {
+    const rakeCol = document.getElementById('rake_code').closest('.col-md-4, .col-md-6');
+    const productCol = document.getElementById('product_select_container');
+    const serialCol = document.getElementById('serial_number_container');
+    
+    if (rakeCol) {
+        rakeCol.classList.remove('col-md-4');
+        rakeCol.classList.add('col-md-6');
+    }
+    productCol.classList.remove('col-md-4');
+    productCol.classList.add('col-md-6');
+    serialCol.classList.remove('col-md-4');
+    serialCol.classList.add('col-md-6');
+}
+
+// Form submission validation
+document.querySelector('form').addEventListener('submit', function(e) {
+    const quantity = parseFloat(document.getElementById('quantity_in_mt').value) || 0;
+    
+    if (currentRakeBalance && quantity > currentRakeBalance.remaining) {
+        e.preventDefault();
+        alert(`Cannot create loading slip!\nRemaining rake quantity: ${currentRakeBalance.remaining.toFixed(2)} MT\nRequested quantity: ${quantity.toFixed(2)} MT`);
+        return false;
+    }
+    
+    // Validate account is selected
+    const accountValue = document.getElementById('account').value;
+    if (!accountValue) {
+        e.preventDefault();
+        alert('Please select an account/warehouse!');
+        return false;
+    }
+    
+    // Validate sub_head if Payal account is selected
+    const subHeadContainer = document.getElementById('sub_head_container');
+    if (subHeadContainer.style.display !== 'none') {
+        const subHead = document.getElementById('sub_head').value.trim();
+        if (!subHead) {
+            e.preventDefault();
+            alert('Sub Head is required for Payal accounts!');
+            return false;
+        }
+    }
+});
+
+// Search functionality for accounts dropdown
+const accountSearch = document.getElementById('account_search');
+const accountDropdown = document.getElementById('account_dropdown');
+const accountHidden = document.getElementById('account');
+const accountOptions = document.querySelectorAll('.account-option');
+
+// Show dropdown on focus
+accountSearch.addEventListener('focus', function() {
+    accountDropdown.style.display = 'block';
+    filterOptions('');
+});
+
+// Filter on input
+accountSearch.addEventListener('input', function() {
+    accountDropdown.style.display = 'block';
+    filterOptions(this.value.toLowerCase());
+});
+
+// Hide dropdown when clicking outside
+document.addEventListener('click', function(e) {
+    if (!accountSearch.contains(e.target) && !accountDropdown.contains(e.target)) {
+        accountDropdown.style.display = 'none';
+    }
+});
+
+// Filter options based on search
+function filterOptions(searchTerm) {
+    let anyVisible = false;
+    accountOptions.forEach(function(option) {
+        const text = option.textContent.toLowerCase();
+        if (text.includes(searchTerm)) {
+            option.style.display = '';
+            anyVisible = true;
+        } else {
+            option.style.display = 'none';
+        }
+    });
+    
+    // Show/hide headers based on visible options
+    accountDropdown.querySelectorAll('.dropdown-header').forEach(function(header) {
+        let next = header.nextElementSibling;
+        let hasVisible = false;
+        while (next && !next.classList.contains('dropdown-header') && !next.classList.contains('dropdown-divider')) {
+            if (next.style.display !== 'none') {
+                hasVisible = true;
+                break;
+            }
+            next = next.nextElementSibling;
+        }
+        header.style.display = hasVisible ? '' : 'none';
+    });
+}
+
+// Handle option selection
+accountOptions.forEach(function(option) {
+    option.addEventListener('click', function(e) {
+        e.preventDefault();
+        const value = this.dataset.value;
+        const type = this.dataset.type;
+        const address = this.dataset.address || '';
+        
+        accountSearch.value = this.textContent.trim();
+        accountHidden.value = value;
+        accountDropdown.style.display = 'none';
+        
+        // Toggle sub head for Payal accounts
+        toggleSubHead(type);
+        
+        // Show/hide warehouse account section
+        toggleWarehouseAccountSection(type);
+    });
+});
+
+// All accounts data for filtering
+const allAccounts = [
+    {% for account in accounts %}
+    { id: {{ account[0] }}, name: "{{ account[1] }}", type: "{{ account[2] }}" },
+    {% endfor %}
+];
+
+// All companies data for filtering
+const allCompanies = [
+    {% for company in companies %}
+    { id: {{ company[0] }}, name: "{{ company[1] }}" },
+    {% endfor %}
+];
+
+// Show/hide warehouse account section based on destination type
+function toggleWarehouseAccountSection(destType) {
+    const warehouseSection = document.getElementById('warehouse_account_section');
+    const warehouseAccountType = document.getElementById('warehouse_account_type');
+    const warehouseAccountId = document.getElementById('warehouse_account_id');
+    
+    if (destType === 'Warehouse') {
+        warehouseSection.style.display = 'block';
+        warehouseAccountType.required = true;
+        warehouseAccountId.required = true;
+    } else {
+        warehouseSection.style.display = 'none';
+        warehouseAccountType.required = false;
+        warehouseAccountId.required = false;
+        warehouseAccountType.value = '';
+        warehouseAccountId.innerHTML = '<option value="">-- First select account type --</option>';
+    }
+}
+
+// Filter accounts by type for warehouse account selection
+function filterWarehouseAccounts() {
+    const selectedType = document.getElementById('warehouse_account_type').value;
+    const accountSelect = document.getElementById('warehouse_account_id');
+    
+    accountSelect.innerHTML = '<option value="">-- Select Account --</option>';
+    
+    if (selectedType) {
+        // Handle Company type separately  
+        if (selectedType === 'Company') {
+            allCompanies.forEach(company => {
+                const option = document.createElement('option');
+                option.value = company.id;
+                option.textContent = company.name;
+                accountSelect.appendChild(option);
+            });
+            
+            if (allCompanies.length === 0) {
+                accountSelect.innerHTML = '<option value="">No companies found</option>';
+            }
+        } else {
+            // Filter regular accounts by type
+            const filteredAccounts = allAccounts.filter(acc => acc.type === selectedType);
+            filteredAccounts.forEach(acc => {
+                const option = document.createElement('option');
+                option.value = acc.id;
+                option.textContent = acc.name + ' - ' + acc.type;
+                accountSelect.appendChild(option);
+            });
+            
+            if (filteredAccounts.length === 0) {
+                accountSelect.innerHTML = '<option value="">No accounts found for this type</option>';
+            }
+        }
+    }
+}
+
+// Toggle Sub Head field based on account type
+function toggleSubHead(accountType) {
+    const subHeadContainer = document.getElementById('sub_head_container');
+    const subHeadInput = document.getElementById('sub_head');
+    const wagonContainer = document.getElementById('wagon_container');
+    
+    if (accountType === 'Payal') {
+        subHeadContainer.style.display = 'block';
+        subHeadInput.required = true;
+        wagonContainer.classList.remove('col-md-6');
+        wagonContainer.classList.add('col-md-12');
+    } else {
+        subHeadContainer.style.display = 'none';
+        subHeadInput.required = false;
+        subHeadInput.value = '';
+        wagonContainer.classList.remove('col-md-12');
+        wagonContainer.classList.add('col-md-6');
+    }
+}
+
+// Auto-open print window and reset form if print action was clicked
+{% if print_slip_id %}
+window.addEventListener('load', function() {
+    const printWindow = window.open('{{ url_for("rakepoint_print_loading_slip", slip_id=print_slip_id) }}', '_blank', 'width=800,height=600');
+    setTimeout(function() {
+        document.querySelector('form').reset();
+        document.getElementById('rake-balance-alert').style.display = 'none';
+        document.getElementById('account_search').value = '';
+        document.getElementById('account').value = '';
+        document.getElementById('warehouse_account_section').style.display = 'none';
+        currentRakeBalance = null;
+    }, 500);
+});
+{% endif %}
+</script>
+{% endblock %}

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Payal Fertilizers{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #64748b;
+            --success-color: #10b981;
+            --danger-color: #ef4444;
+            --warning-color: #f59e0b;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8fafc;
+        }
+        
+        .sidebar {
+            min-height: 100vh;
+            height: 100vh;
+            background: linear-gradient(180deg, #1e40af 0%, #1e3a8a 100%);
+            color: white;
+            position: fixed;
+            width: 250px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .sidebar-header {
+            flex-shrink: 0;
+            padding: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .sidebar-nav {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding-bottom: 0.5rem;
+            padding-top: 0.5rem;
+            min-height: 0;
+        }
+        
+        .sidebar-nav::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .sidebar-nav::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .sidebar-nav::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 4px;
+        }
+        
+        .sidebar-nav::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.6);
+        }
+        
+        .sidebar-footer {
+            flex-shrink: 0;
+            padding: 0.5rem 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.2);
+        }
+        
+        .sidebar .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            padding: 8px 15px;
+            border-radius: 6px;
+            margin: 1px 8px;
+            transition: all 0.3s;
+            font-size: 13px;
+        }
+        
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+        
+        .sidebar .nav-link i {
+            width: 18px;
+            display: inline-block;
+        }
+        
+        .sidebar-section-header {
+            padding: 6px 15px 3px 15px;
+            margin-top: 5px;
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+        
+        .main-content {
+            margin-left: 250px;
+            padding: 20px;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .stat-card .stat-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+        
+        .btn-primary {
+            background-color: var(--primary-color);
+            border: none;
+        }
+        
+        .btn-primary:hover {
+            background-color: #1d4ed8;
+        }
+        
+        .alert {
+            border: none;
+            border-radius: 8px;
+        }
+        
+        .table {
+            background: white;
+        }
+        
+        .badge {
+            padding: 6px 12px;
+            border-radius: 6px;
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    {% if current_user.is_authenticated %}
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h4 class="mb-0"><i class="bi bi-building"></i> Payal Fertilizers</h4>
+            <small>Inventory Management System</small>
+        </div>
+        
+        <nav class="sidebar-nav nav flex-column mt-2">
+            {% if current_user.role == 'Admin' %}
+                <a class="nav-link {% if 'admin_dashboard' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_dashboard') }}">
+                    <i class="bi bi-speedometer2"></i> Dashboard
+                </a>
+                <a class="nav-link {% if 'admin_add_rake' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_add_rake') }}">
+                    <i class="bi bi-plus-circle"></i> Add Rake
+                </a>
+                <a class="nav-link {% if 'admin_manage_accounts' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_manage_accounts') }}">
+                    <i class="bi bi-people"></i> Manage Accounts
+                </a>
+                <a class="nav-link {% if 'admin_summary' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_summary') }}">
+                    <i class="bi bi-table"></i> Rake Summary
+                </a>
+                <div class="sidebar-section-header text-white-50"><strong>VIEW ALL DATA</strong></div>
+                <a class="nav-link {% if 'admin_all_loading_slips' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_all_loading_slips') }}">
+                    <i class="bi bi-file-text"></i> All Loading Slips
+                </a>
+                <a class="nav-link {% if 'admin_all_builties' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_all_builties') }}">
+                    <i class="bi bi-file-earmark-text"></i> All Builties
+                </a>
+                <a class="nav-link {% if 'admin_all_ebills' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_all_ebills') }}">
+                    <i class="bi bi-receipt"></i> All E-Bills
+                </a>
+                <div class="sidebar-section-header text-white-50"><strong>STOCK MANAGEMENT</strong></div>
+                <a class="nav-link {% if 'admin_warehouse_transactions' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_warehouse_transactions') }}">
+                    <i class="bi bi-box-seam"></i> Warehouse Stock
+                </a>
+                <a class="nav-link {% if 'admin_warehouse_summary' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_warehouse_summary') }}">
+                    <i class="bi bi-bar-chart-fill"></i> Warehouse Summary
+                </a>
+                <a class="nav-link {% if 'admin_edit_warehouse_stock' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_edit_warehouse_stock') }}">
+                    <i class="bi bi-pencil-square"></i> Edit Stock
+                </a>
+                <a class="nav-link {% if 'admin_logistic_bill' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_logistic_bill') }}">
+                    <i class="bi bi-truck"></i> Logistic Bill
+                </a>
+                <a class="nav-link {% if 'admin_manage_warehouses' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_manage_warehouses') }}">
+                    <i class="bi bi-building"></i> Manage Warehouses
+                </a>
+            {% elif current_user.role == 'RakePoint' %}
+                <a class="nav-link {% if 'rakepoint_dashboard' in request.endpoint %}active{% endif %}" href="{{ url_for('rakepoint_dashboard') }}">
+                    <i class="bi bi-speedometer2"></i> Dashboard
+                </a>
+                <a class="nav-link {% if 'rakepoint_create_loading_slip' in request.endpoint %}active{% endif %}" href="{{ url_for('rakepoint_create_loading_slip') }}">
+                    <i class="bi bi-receipt"></i> Create Loading Slip
+                </a>
+                <a class="nav-link {% if 'rakepoint_create_builty' in request.endpoint %}active{% endif %}" href="{{ url_for('rakepoint_create_builty') }}">
+                    <i class="bi bi-file-plus"></i> Create Builty
+                </a>
+                <a class="nav-link {% if 'rakepoint_loading_slips' in request.endpoint %}active{% endif %}" href="{{ url_for('rakepoint_loading_slips') }}">
+                    <i class="bi bi-list-ul"></i> View Loading Slips
+                </a>
+                <a class="nav-link {% if 'rakepoint_all_builties' in request.endpoint %}active{% endif %}" href="{{ url_for('rakepoint_all_builties') }}">
+                    <i class="bi bi-file-earmark-text"></i> All Builties
+                </a>
+                <a class="nav-link {% if 'rakepoint_view_ebills' in request.endpoint %}active{% endif %}" href="{{ url_for('rakepoint_view_ebills') }}">
+                    <i class="bi bi-receipt"></i> View E-Bills
+                </a>
+            {% elif current_user.role == 'Warehouse' %}
+                <a class="nav-link {% if 'warehouse_dashboard' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_dashboard') }}">
+                    <i class="bi bi-speedometer2"></i> Dashboard
+                </a>
+                <a class="nav-link {% if 'warehouse_stock_in' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_stock_in') }}">
+                    <i class="bi bi-box-arrow-in-down"></i> Stock IN
+                </a>
+                <a class="nav-link {% if 'warehouse_do_creation' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_do_creation') }}">
+                    <i class="bi bi-arrow-left-right"></i> Stock Allotment
+                </a>
+                <div class="px-3 py-2 text-white-50 small"><strong>Stock OUT (2 Steps)</strong></div>
+                <a class="nav-link {% if 'warehouse_create_loading_slip' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_create_loading_slip') }}">
+                    <i class="bi bi-receipt"></i> Create Loading Slip
+                </a>
+                <a class="nav-link {% if 'warehouse_create_builty' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_create_builty') }}">
+                    <i class="bi bi-file-earmark-plus"></i> Create Builty
+                </a>
+                <a class="nav-link {% if 'warehouse_loading_slips' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_loading_slips') }}">
+                    <i class="bi bi-list-ul"></i> View Loading Slips
+                </a>
+                <a class="nav-link {% if 'warehouse_all_builties' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_all_builties') }}">
+                    <i class="bi bi-file-earmark-text"></i> All Builties
+                </a>
+                <a class="nav-link {% if 'warehouse_view_ebills' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_view_ebills') }}">
+                    <i class="bi bi-receipt"></i> View E-Bills
+                </a>
+                <div class="px-3 py-2 text-white-50 small"><strong>Reports</strong></div>
+                <a class="nav-link {% if 'warehouse_balance_all' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_balance_all') }}">
+                    <i class="bi bi-bar-chart-fill"></i> Summary
+                </a>
+            {% elif current_user.role == 'Accountant' %}
+                <a class="nav-link {% if 'accountant_dashboard' in request.endpoint %}active{% endif %}" href="{{ url_for('accountant_dashboard') }}">
+                    <i class="bi bi-speedometer2"></i> Dashboard
+                </a>
+                <a class="nav-link {% if 'accountant_create_ebill' in request.endpoint %}active{% endif %}" href="{{ url_for('accountant_create_ebill') }}">
+                    <i class="bi bi-file-earmark-text"></i> Create E-Bill
+                </a>
+                <a class="nav-link {% if 'accountant_all_ebills' in request.endpoint %}active{% endif %}" href="{{ url_for('accountant_all_ebills') }}">
+                    <i class="bi bi-list-ul"></i> All E-Bills
+                </a>
+            {% endif %}
+        </nav>
+        
+        <div class="sidebar-footer">
+            <div class="d-flex align-items-center mb-2">
+                <div class="flex-shrink-0">
+                    <div class="bg-white rounded-circle" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
+                        <i class="bi bi-person-fill text-primary" style="font-size: 14px;"></i>
+                    </div>
+                </div>
+                <div class="flex-grow-1 ms-2">
+                    <div class="fw-bold" style="font-size: 13px;">{{ current_user.username }}</div>
+                    <small style="font-size: 11px;">{{ current_user.role }}</small>
+                </div>
+            </div>
+            <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm w-100">
+                <i class="bi bi-box-arrow-right"></i> Logout
+            </a>
+        </div>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        {% block content %}{% endblock %}
+    </div>
+    {% else %}
+    <!-- Login Page (no sidebar) -->
+    {% block login_content %}{% endblock %}
+    {% endif %}
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

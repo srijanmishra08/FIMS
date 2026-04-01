@@ -1,0 +1,990 @@
+{% extends "base.html" %}
+
+{% block title %}Logistic Bill - FIMS{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-truck"></i> Logistic Bill</h2>
+    <div class="btn-group" role="group">
+        <button type="button" class="btn btn-outline-primary" id="billSummaryBtn" onclick="showBillType('summary')">
+            <i class="bi bi-list-ul"></i> Bill Summary
+        </button>
+        <button type="button" class="btn btn-primary active" id="rakeBillBtn" onclick="showBillType('rake')">
+            <i class="bi bi-train-freight-front"></i> Rake Bill
+        </button>
+        <button type="button" class="btn btn-outline-primary" id="warehouseBillBtn" onclick="showBillType('warehouse')">
+            <i class="bi bi-building"></i> Warehouse Bill
+        </button>
+    </div>
+</div>
+
+<!-- BILL SUMMARY SECTION -->
+<div id="billSummarySection" style="display: none;">
+    <div class="card mb-4">
+        <div class="card-header bg-dark text-white">
+            <h5 class="mb-3"><i class="bi bi-list-ul"></i> Bill Summary</h5>
+            <div class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label mb-1">Company Filter</label>
+                    <select class="form-select form-select-sm" id="companySummaryFilter">
+                        <option value="all" {% if selected_company == 'all' %}selected{% endif %}>All Companies</option>
+                        {% for company in companies %}
+                        <option value="{{ company[1] }}" {% if selected_company == company[1] %}selected{% endif %}>{{ company[1] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label mb-1">Rake Filter</label>
+                    <select class="form-select form-select-sm" id="rakeSummaryFilter">
+                        <option value="all" {% if selected_rake == 'all' %}selected{% endif %}>All Rakes</option>
+                        {% for rake in rakes %}
+                        <option value="{{ rake[1] }}" {% if selected_rake == rake[1] %}selected{% endif %}>{{ rake[1] }} - {{ rake[2] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label mb-1">From Date</label>
+                    <input type="date" class="form-control form-control-sm" id="dateFromFilter" value="{{ date_from or '' }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label mb-1">To Date</label>
+                    <input type="date" class="form-control form-control-sm" id="dateToFilter" value="{{ date_to or '' }}">
+                </div>
+                <div class="col-md-4 text-end">
+                    <button class="btn btn-primary btn-sm me-1" onclick="applyFilters()" title="Apply filters">
+                        <i class="bi bi-funnel"></i> Apply Filters
+                    </button>
+                    <button class="btn btn-secondary btn-sm me-1" onclick="clearAllFilters()" title="Clear all filters">
+                        <i class="bi bi-x-circle"></i> Clear All
+                    </button>
+                    <button class="btn btn-success btn-sm me-1" onclick="downloadBillSummaryExcel()">
+                        <i class="bi bi-file-earmark-excel"></i> Excel
+                    </button>
+                    <button class="btn btn-info btn-sm" onclick="window.print()">
+                        <i class="bi bi-printer"></i> Print
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped mb-0" id="billSummaryTable">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>#</th>
+                            <th>Rake</th>
+                            <th>Company</th>
+                            <th>Total Stock (MT)</th>
+                            <th>Date</th>
+                            <th>Bill Amount (₹)</th>
+                            <th>Received (₹)</th>
+                            <th>Left (₹)</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="billSummaryBody">
+                        {% if bill_summary %}
+                            {% for bill in bill_summary %}
+                            <tr data-rake="{{ bill.rake_code }}" data-company="{{ bill.company_name }}">
+                                <td>{{ loop.index }}</td>
+                                <td><strong>{{ bill.rake_code }}</strong></td>
+                                <td>{{ bill.company_name }}</td>
+                                <td class="text-end">{{ "%.2f"|format(bill.total_stock) }}</td>
+                                <td>{{ bill.date|format_date }}</td>
+                                <td class="text-end text-primary"><strong>₹ {{ "%.2f"|format(bill.bill_amount or 0) }}</strong></td>
+                                <td class="text-end text-success">
+                                    <input type="number" 
+                                           class="form-control form-control-sm text-end received-input" 
+                                           value="{{ bill.received_payment or 0 }}" 
+                                           data-rake="{{ bill.rake_code }}"
+                                           onchange="updateReceivedAmount('{{ bill.rake_code }}', this.value)"
+                                           style="width: 120px; display: inline-block;">
+                                </td>
+                                <td class="text-end text-danger" id="left-{{ bill.rake_code }}">₹ {{ "%.2f"|format((bill.bill_amount or 0) - (bill.received_payment or 0)) }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary" onclick="viewRakeBill('{{ bill.rake_code }}')" title="View">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                        <button class="btn btn-outline-success" onclick="downloadSingleBill('{{ bill.rake_code }}')" title="Download">
+                                            <i class="bi bi-download"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            <tr class="table-primary fw-bold" id="summary-total-row">
+                                <td colspan="3">TOTAL</td>
+                                <td class="text-end" id="total-stock">{{ "%.2f"|format(bill_summary|sum(attribute='total_stock')) }} MT</td>
+                                <td>-</td>
+                                <td class="text-end" id="total-bill">₹ {{ "%.2f"|format(bill_summary|sum(attribute='bill_amount') or 0) }}</td>
+                                <td class="text-end" id="total-received">₹ {{ "%.2f"|format(bill_summary|sum(attribute='received_payment') or 0) }}</td>
+                                <td class="text-end" id="total-left">₹ {{ "%.2f"|format((bill_summary|sum(attribute='bill_amount') or 0) - (bill_summary|sum(attribute='received_payment') or 0)) }}</td>
+                                <td>-</td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="9" class="text-center text-muted py-4">
+                                    <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                    No bill data available
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- RAKE BILL SECTION -->
+<div id="rakeBillSection">
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-train-freight-front"></i> Rake Bill</h5>
+            <div>
+                <select class="form-select form-select-sm d-inline-block w-auto me-2" id="rakeSelect" onchange="loadRakeData()">
+                    <option value="">Select Rake</option>
+                    {% for rake in rakes %}
+                    <option value="{{ rake[1] }}">{{ rake[0] }} - {{ rake[1] }} ({{ rake[2] }})</option>
+                    {% endfor %}
+                </select>
+                <button class="btn btn-success btn-sm" onclick="downloadRakeBillExcel()" id="downloadRakeBtn" disabled>
+                    <i class="bi bi-file-earmark-excel"></i> Download Excel
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <!-- Rake Transport Table -->
+            <h5 class="text-primary mb-3">1. Rake Transport</h5>
+            <div class="table-responsive mb-4">
+                <table class="table table-bordered table-hover" id="rakeTransportTable">
+                    <thead class="table-primary">
+                        <tr>
+                            <th>Type</th>
+                            <th>Account/Destination</th>
+                            <th>QT (MT)</th>
+                            <th>KM Distance</th>
+                            <th>Rate (₹)</th>
+                            <th>Total (₹)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rakeTransportBody">
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">Select a rake to load data</td>
+                        </tr>
+                    </tbody>
+                    <tfoot class="table-secondary">
+                        <tr>
+                            <th colspan="5" class="text-end">Rake Transport Total:</th>
+                            <th id="rakeTransportTotal">₹ 0.00</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- Rake Handling Table -->
+            <h5 class="text-primary mb-3">2. Rake Handling</h5>
+            <div class="table-responsive mb-4">
+                <table class="table table-bordered table-hover" id="rakeHandlingTable">
+                    <thead class="table-primary">
+                        <tr>
+                            <th>Handling Situation</th>
+                            <th>QT (MT)</th>
+                            <th>Rate (₹)</th>
+                            <th>Total (₹)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rakeHandlingBody">
+                        <tr data-situation="unloading_wagon">
+                            <td>Unloading from wagon to dump</td>
+                            <td><input type="number" class="form-control form-control-sm handling-qty" step="0.01" min="0" onchange="calculateHandlingRow(this)"></td>
+                            <td><input type="number" class="form-control form-control-sm handling-rate" step="0.01" min="0" onchange="calculateHandlingRow(this)"></td>
+                            <td class="handling-total">₹ 0.00</td>
+                        </tr>
+                        <tr data-situation="loading_dump">
+                            <td>Loading from dump to truck</td>
+                            <td><input type="number" class="form-control form-control-sm handling-qty" step="0.01" min="0" onchange="calculateHandlingRow(this)"></td>
+                            <td><input type="number" class="form-control form-control-sm handling-rate" step="0.01" min="0" onchange="calculateHandlingRow(this)"></td>
+                            <td class="handling-total">₹ 0.00</td>
+                        </tr>
+                        <tr data-situation="cgmf_unloading">
+                            <td>CGMF Unloading</td>
+                            <td><input type="number" class="form-control form-control-sm handling-qty" step="0.01" min="0" onchange="calculateHandlingRow(this)"></td>
+                            <td><input type="number" class="form-control form-control-sm handling-rate" step="0.01" min="0" onchange="calculateHandlingRow(this)"></td>
+                            <td class="handling-total">₹ 0.00</td>
+                        </tr>
+                        <tr data-situation="standardization">
+                            <td>Standardization</td>
+                            <td><input type="number" class="form-control form-control-sm handling-qty" step="0.01" min="0" onchange="calculateHandlingRow(this)"></td>
+                            <td><input type="number" class="form-control form-control-sm handling-rate" step="0.01" min="0" onchange="calculateHandlingRow(this)"></td>
+                            <td class="handling-total">₹ 0.00</td>
+                        </tr>
+                    </tbody>
+                    <tfoot class="table-secondary">
+                        <tr>
+                            <th colspan="3" class="text-end">Rake Handling Total:</th>
+                            <th id="rakeHandlingTotal">₹ 0.00</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- Grand Total -->
+            <div class="card bg-success text-white mb-3">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">RAKE BILL GRAND TOTAL</h4>
+                    <h3 class="mb-0" id="rakeGrandTotal">₹ 0.00</h3>
+                </div>
+            </div>
+            
+            <!-- Payment Tracking Section -->
+            <div class="card border-primary">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0 text-primary"><i class="bi bi-cash-coin"></i> Payment Tracking</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Total Bill Amount</label>
+                            <div class="input-group">
+                                <span class="input-group-text">₹</span>
+                                <input type="number" class="form-control" id="totalBillAmount" readonly>
+                            </div>
+                            <small class="text-muted">Auto-calculated from above</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Received Amount <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text">₹</span>
+                                <input type="number" class="form-control" id="receivedAmount" step="0.01" min="0" onchange="calculateRemaining()">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Remaining Amount</label>
+                            <div class="input-group">
+                                <span class="input-group-text">₹</span>
+                                <input type="number" class="form-control text-danger fw-bold" id="remainingAmount" readonly>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3 text-end">
+                        <button class="btn btn-primary btn-lg" onclick="saveRakeBillPayment()" id="savePaymentBtn" disabled>
+                            <i class="bi bi-save"></i> Save Payment Details
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- WAREHOUSE BILL SECTION -->
+<div id="warehouseBillSection" style="display: none;">
+    <div class="card mb-4">
+        <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-building"></i> Warehouse Bill</h5>
+            <div>
+                <select class="form-select form-select-sm d-inline-block w-auto me-2" id="warehouseSelect" onchange="loadWarehouseData()">
+                    <option value="">Select Warehouse (All)</option>
+                    {% for warehouse in warehouses %}
+                    <option value="{{ warehouse[0] }}">{{ warehouse[1] }}</option>
+                    {% endfor %}
+                </select>
+                <button class="btn btn-success btn-sm" onclick="downloadWarehouseBillExcel()" id="downloadWarehouseBtn">
+                    <i class="bi bi-file-earmark-excel"></i> Download Excel
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <!-- Storage Table -->
+            <h5 class="text-info mb-3">1. Storage (Stock In)</h5>
+            <div class="table-responsive mb-4">
+                <table class="table table-bordered table-hover" id="storageTable">
+                    <thead class="table-info">
+                        <tr>
+                            <th>Date</th>
+                            <th>Company</th>
+                            <th>Product</th>
+                            <th>QT (MT)</th>
+                            <th>Rate (₹)</th>
+                            <th>Total (₹)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="storageBody">
+                        {% for item in storage_data %}
+                        <tr data-stock-id="{{ item[4] }}">
+                            <td>{{ item[0] }}</td>
+                            <td>{{ item[1] or '-' }}</td>
+                            <td>{{ item[2] or '-' }}</td>
+                            <td><input type="number" class="form-control form-control-sm storage-qty" value="{{ item[3] }}" step="0.01" min="0" onchange="calculateStorageRow(this)"></td>
+                            <td><input type="number" class="form-control form-control-sm storage-rate" step="0.01" min="0" onchange="calculateStorageRow(this)"></td>
+                            <td class="storage-total">₹ 0.00</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">No storage data available</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="table-secondary">
+                        <tr>
+                            <th colspan="5" class="text-end">Storage Total:</th>
+                            <th id="storageTotal">₹ 0.00</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- Transportation Table -->
+            <h5 class="text-info mb-3">2. Transportation (Stock Out - Builty Wise)</h5>
+            <div class="table-responsive mb-4">
+                <table class="table table-bordered table-hover" id="transportTable">
+                    <thead class="table-info">
+                        <tr>
+                            <th>Date</th>
+                            <th>Truck</th>
+                            <th>Account</th>
+                            <th>Product</th>
+                            <th>QT (MT)</th>
+                            <th>KM</th>
+                            <th>Rate (₹)</th>
+                            <th>Total (₹)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transportBody">
+                        {% for item in transport_data %}
+                        <tr data-stock-id="{{ item[6] }}">
+                            <td>{{ item[0] }}</td>
+                            <td>{{ item[1] or '-' }}</td>
+                            <td>{{ item[2] or '-' }}</td>
+                            <td>{{ item[3] or '-' }}</td>
+                            <td>{{ item[4] }}</td>
+                            <td><input type="number" class="form-control form-control-sm transport-km" value="{{ item[5] or 0 }}" step="0.1" min="0" onchange="calculateTransportRow(this)"></td>
+                            <td><input type="number" class="form-control form-control-sm transport-rate" step="0.01" min="0" onchange="calculateTransportRow(this)"></td>
+                            <td class="transport-total">₹ 0.00</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted">No transportation data available</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="table-secondary">
+                        <tr>
+                            <th colspan="7" class="text-end">Transportation Total:</th>
+                            <th id="transportTotal">₹ 0.00</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- Grand Total -->
+            <div class="card bg-info text-white">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">WAREHOUSE BILL GRAND TOTAL</h4>
+                    <h3 class="mb-0" id="warehouseGrandTotal">₹ 0.00</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Global variables to store data for Excel export
+let rakeTransportData = [];
+let rakeHandlingData = [];
+let warehouseStorageData = [];
+let warehouseTransportData = [];
+
+function showBillType(type) {
+    // Hide all sections first
+    document.getElementById('billSummarySection').style.display = 'none';
+    document.getElementById('rakeBillSection').style.display = 'none';
+    document.getElementById('warehouseBillSection').style.display = 'none';
+    
+    // Reset all buttons
+    document.getElementById('billSummaryBtn').classList.remove('active', 'btn-primary');
+    document.getElementById('billSummaryBtn').classList.add('btn-outline-primary');
+    document.getElementById('rakeBillBtn').classList.remove('active', 'btn-primary');
+    document.getElementById('rakeBillBtn').classList.add('btn-outline-primary');
+    document.getElementById('warehouseBillBtn').classList.remove('active', 'btn-primary');
+    document.getElementById('warehouseBillBtn').classList.add('btn-outline-primary');
+    
+    // Show selected section and activate button
+    if (type === 'summary') {
+        document.getElementById('billSummarySection').style.display = 'block';
+        document.getElementById('billSummaryBtn').classList.add('active', 'btn-primary');
+        document.getElementById('billSummaryBtn').classList.remove('btn-outline-primary');
+    } else if (type === 'rake') {
+        document.getElementById('rakeBillSection').style.display = 'block';
+        document.getElementById('rakeBillBtn').classList.add('active', 'btn-primary');
+        document.getElementById('rakeBillBtn').classList.remove('btn-outline-primary');
+    } else {
+        document.getElementById('warehouseBillSection').style.display = 'block';
+        document.getElementById('warehouseBillBtn').classList.add('active', 'btn-primary');
+        document.getElementById('warehouseBillBtn').classList.remove('btn-outline-primary');
+    }
+}
+
+function filterBillSummary() {
+    const filterValue = document.getElementById('summaryFilter').value;
+    const rows = document.querySelectorAll('#billSummaryBody tr[data-rake]');
+    
+    rows.forEach(row => {
+        if (filterValue === 'all' || row.dataset.rake === filterValue) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+// Function to apply filters - triggered by Apply button
+function applyFilters() {
+    const companyFilter = document.getElementById('companySummaryFilter').value;
+    const rakeFilter = document.getElementById('rakeSummaryFilter').value;
+    const dateFrom = document.getElementById('dateFromFilter').value;
+    const dateTo = document.getElementById('dateToFilter').value;
+    
+    // Build URL with filter parameters
+    let url = '/admin/logistic-bill?company=' + encodeURIComponent(companyFilter) + 
+              '&rake=' + encodeURIComponent(rakeFilter);
+    if (dateFrom) url += '&date_from=' + encodeURIComponent(dateFrom);
+    if (dateTo) url += '&date_to=' + encodeURIComponent(dateTo);
+    
+    // Store that we're viewing bill summary
+    sessionStorage.setItem('logisticBillView', 'summary');
+    
+    // Reload with filters
+    window.location.href = url;
+}
+
+// Function to clear all filters
+function clearAllFilters() {
+    document.getElementById('companySummaryFilter').value = 'all';
+    document.getElementById('rakeSummaryFilter').value = 'all';
+    document.getElementById('dateFromFilter').value = '';
+    document.getElementById('dateToFilter').value = '';
+    
+    sessionStorage.setItem('logisticBillView', 'summary');
+    window.location.href = '/admin/logistic-bill';
+}
+
+function updateReceivedAmount(rakeCode, receivedAmount) {
+    const row = document.querySelector(`tr[data-rake="${rakeCode}"]`);
+    if (!row) return;
+    
+    const billAmount = parseFloat(row.cells[5].textContent.replace('₹', '').replace(/,/g, '')) || 0;
+    const received = parseFloat(receivedAmount) || 0;
+    const left = billAmount - received;
+    
+    // Update left amount cell
+    const leftCell = document.getElementById(`left-${rakeCode}`);
+    leftCell.textContent = '₹ ' + left.toFixed(2);
+    
+    // Recalculate totals (locally, don't reload page)
+    recalculateTotals();
+    
+    // TODO: Save to backend via AJAX if needed
+    console.log(`Updated ${rakeCode}: Received ₹${received}, Left ₹${left}`);
+}
+
+function viewRakeBill(rakeCode) {
+    // Switch to rake bill section and select the rake
+    showBillType('rake');
+    document.getElementById('rakeSelect').value = rakeCode;
+    loadRakeData();
+}
+
+function downloadSingleBill(rakeCode) {
+    window.location.href = '/admin/download-rake-details-excel/' + encodeURIComponent(rakeCode);
+}
+
+function downloadBillSummaryExcel() {
+    const company = document.getElementById('companySummaryFilter').value;
+    const rake = document.getElementById('rakeSummaryFilter').value;
+    const dateFrom = document.getElementById('dateFromFilter').value;
+    const dateTo = document.getElementById('dateToFilter').value;
+    
+    let url = '/admin/download-bill-summary-excel?company=' + encodeURIComponent(company) + '&rake=' + encodeURIComponent(rake);
+    if (dateFrom) url += '&date_from=' + encodeURIComponent(dateFrom);
+    if (dateTo) url += '&date_to=' + encodeURIComponent(dateTo);
+    
+    window.location.href = url;
+}
+
+// Recalculate totals without reloading page
+function recalculateTotals() {
+    const rows = document.querySelectorAll('#billSummaryBody tr[data-rake]');
+    let totalStock = 0, totalBill = 0, totalReceived = 0, totalLeft = 0;
+    
+    rows.forEach(row => {
+        if (row.style.display !== 'none') {
+            totalStock += parseFloat(row.cells[3].textContent) || 0;
+            totalBill += parseFloat(row.cells[5].textContent.replace('₹', '').replace(/,/g, '')) || 0;
+            const receivedInput = row.querySelector('.received-input');
+            if (receivedInput) {
+                totalReceived += parseFloat(receivedInput.value) || 0;
+            }
+        }
+    });
+    
+    totalLeft = totalBill - totalReceived;
+    
+    const totalStockEl = document.getElementById('total-stock');
+    const totalBillEl = document.getElementById('total-bill');
+    const totalReceivedEl = document.getElementById('total-received');
+    const totalLeftEl = document.getElementById('total-left');
+    
+    if (totalStockEl) totalStockEl.textContent = totalStock.toFixed(2) + ' MT';
+    if (totalBillEl) totalBillEl.textContent = '₹ ' + totalBill.toFixed(2);
+    if (totalReceivedEl) totalReceivedEl.textContent = '₹ ' + totalReceived.toFixed(2);
+    if (totalLeftEl) totalLeftEl.textContent = '₹ ' + totalLeft.toFixed(2);
+}
+
+function loadRakeData() {
+    const rakeCode = document.getElementById('rakeSelect').value;
+    if (!rakeCode) {
+        document.getElementById('rakeTransportBody').innerHTML = '<tr><td colspan="6" class="text-center text-muted">Select a rake to load data</td></tr>';
+        document.getElementById('downloadRakeBtn').disabled = true;
+        document.getElementById('savePaymentBtn').disabled = true;
+        return;
+    }
+    
+    document.getElementById('downloadRakeBtn').disabled = false;
+    
+    // Fetch rake transport data via AJAX
+    fetch('/admin/logistic-bill/rake-data/' + encodeURIComponent(rakeCode))
+        .then(response => response.json())
+        .then(data => {
+            rakeTransportData = data;
+            renderRakeTransportTable(data);
+            
+            // Load existing payment data if available
+            return fetch('/admin/get-rake-bill-payment/' + encodeURIComponent(rakeCode));
+        })
+        .then(response => response.json())
+        .then(paymentData => {
+            if (paymentData && !paymentData.error) {
+                document.getElementById('receivedAmount').value = paymentData.received_amount || 0;
+                calculateRemaining();
+            } else {
+                document.getElementById('receivedAmount').value = 0;
+                calculateRemaining();
+            }
+        })
+        .catch(err => {
+            console.error('Error loading rake data:', err);
+            document.getElementById('rakeTransportBody').innerHTML = '<tr><td colspan="6" class="text-center text-danger">Error loading data</td></tr>';
+        });
+}
+
+function renderRakeTransportTable(data) {
+    const tbody = document.getElementById('rakeTransportBody');
+    
+    if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No dispatch data for this rake</td></tr>';
+        return;
+    }
+    
+    // Group by destination type
+    const grouped = {};
+    data.forEach(item => {
+        if (!grouped[item.dest_type]) {
+            grouped[item.dest_type] = [];
+        }
+        grouped[item.dest_type].push(item);
+    });
+    
+    let html = '';
+    const typeOrder = ['Warehouse', 'Dealer', 'Retailer', 'Payal', 'CGMF'];
+    
+    typeOrder.forEach(type => {
+        if (grouped[type]) {
+            grouped[type].forEach((item, idx) => {
+                html += `
+                    <tr data-dest-type="${item.dest_type}" data-dest-id="${item.dest_id}">
+                        <td>${idx === 0 ? '<strong>' + type + '</strong>' : ''}</td>
+                        <td>${item.dest_name}</td>
+                        <td><input type="number" class="form-control form-control-sm transport-qty" value="${item.quantity}" step="0.01" min="0" onchange="calculateTransportRowRake(this)"></td>
+                        <td><input type="number" class="form-control form-control-sm transport-km" value="${item.distance || 0}" step="0.1" min="0" onchange="calculateTransportRowRake(this)"></td>
+                        <td><input type="number" class="form-control form-control-sm transport-rate" step="0.01" min="0" onchange="calculateTransportRowRake(this)"></td>
+                        <td class="transport-total-rake">₹ 0.00</td>
+                    </tr>
+                `;
+            });
+        }
+    });
+    
+    tbody.innerHTML = html || '<tr><td colspan="6" class="text-center text-muted">No dispatch data for this rake</td></tr>';
+}
+
+function calculateTransportRowRake(input) {
+    const row = input.closest('tr');
+    const qty = parseFloat(row.querySelector('.transport-qty').value) || 0;
+    const km = parseFloat(row.querySelector('.transport-km').value) || 0;
+    const rate = parseFloat(row.querySelector('.transport-rate').value) || 0;
+    const total = qty * km * rate;
+    row.querySelector('.transport-total-rake').textContent = '₹ ' + total.toFixed(2);
+    calculateRakeTotals();
+}
+
+function calculateHandlingRow(input) {
+    const row = input.closest('tr');
+    const qty = parseFloat(row.querySelector('.handling-qty').value) || 0;
+    const rate = parseFloat(row.querySelector('.handling-rate').value) || 0;
+    const total = qty * rate;
+    row.querySelector('.handling-total').textContent = '₹ ' + total.toFixed(2);
+    calculateRakeTotals();
+}
+
+function calculateRakeTotals() {
+    // Calculate transport total
+    let transportTotal = 0;
+    document.querySelectorAll('.transport-total-rake').forEach(cell => {
+        const value = parseFloat(cell.textContent.replace('₹ ', '').replace(',', '')) || 0;
+        transportTotal += value;
+    });
+    document.getElementById('rakeTransportTotal').textContent = '₹ ' + transportTotal.toFixed(2);
+    
+    // Calculate handling total
+    let handlingTotal = 0;
+    document.querySelectorAll('.handling-total').forEach(cell => {
+        const value = parseFloat(cell.textContent.replace('₹ ', '').replace(',', '')) || 0;
+        handlingTotal += value;
+    });
+    document.getElementById('rakeHandlingTotal').textContent = '₹ ' + handlingTotal.toFixed(2);
+    
+    // Calculate grand total
+    const grandTotal = transportTotal + handlingTotal;
+    document.getElementById('rakeGrandTotal').textContent = '₹ ' + grandTotal.toFixed(2);
+    
+    // Update total bill amount in payment tracking
+    document.getElementById('totalBillAmount').value = grandTotal.toFixed(2);
+    document.getElementById('savePaymentBtn').disabled = false;
+    calculateRemaining();
+}
+
+function calculateRemaining() {
+    const totalBill = parseFloat(document.getElementById('totalBillAmount').value) || 0;
+    const received = parseFloat(document.getElementById('receivedAmount').value) || 0;
+    const remaining = totalBill - received;
+    document.getElementById('remainingAmount').value = remaining.toFixed(2);
+}
+
+function saveRakeBillPayment() {
+    const rakeCode = document.getElementById('rakeSelect').value;
+    if (!rakeCode) {
+        alert('Please select a rake first');
+        return;
+    }
+    
+    const totalBill = parseFloat(document.getElementById('totalBillAmount').value) || 0;
+    const received = parseFloat(document.getElementById('receivedAmount').value) || 0;
+    const remaining = parseFloat(document.getElementById('remainingAmount').value) || 0;
+    
+    if (received < 0) {
+        alert('Received amount cannot be negative');
+        return;
+    }
+    
+    // Save via AJAX
+    fetch('/admin/save-rake-bill-payment', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            rake_code: rakeCode,
+            total_bill_amount: totalBill,
+            received_amount: received,
+            remaining_amount: remaining
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ Payment details saved successfully!');
+        } else {
+            alert('❌ Error saving payment details: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('❌ Error saving payment details');
+    });
+}
+
+function loadWarehouseData() {
+    const warehouseId = document.getElementById('warehouseSelect').value;
+    
+    // Fetch warehouse data via AJAX
+    fetch('/admin/logistic-bill/warehouse-data' + (warehouseId ? '/' + warehouseId : ''))
+        .then(response => response.json())
+        .then(data => {
+            warehouseStorageData = data.storage;
+            warehouseTransportData = data.transport;
+            renderWarehouseStorageTable(data.storage);
+            renderWarehouseTransportTable(data.transport);
+        })
+        .catch(err => {
+            console.error('Error loading warehouse data:', err);
+        });
+}
+
+function renderWarehouseStorageTable(data) {
+    const tbody = document.getElementById('storageBody');
+    
+    if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No storage data available</td></tr>';
+        return;
+    }
+    
+    let html = '';
+    data.forEach(item => {
+        html += `
+            <tr data-stock-id="${item.stock_id}">
+                <td>${item.date}</td>
+                <td>${item.company || '-'}</td>
+                <td>${item.product || '-'}</td>
+                <td><input type="number" class="form-control form-control-sm storage-qty" value="${item.quantity}" step="0.01" min="0" onchange="calculateStorageRow(this)"></td>
+                <td><input type="number" class="form-control form-control-sm storage-rate" step="0.01" min="0" onchange="calculateStorageRow(this)"></td>
+                <td class="storage-total">₹ 0.00</td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+function renderWarehouseTransportTable(data) {
+    const tbody = document.getElementById('transportBody');
+    
+    if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No transportation data available</td></tr>';
+        return;
+    }
+    
+    let html = '';
+    data.forEach(item => {
+        html += `
+            <tr data-stock-id="${item.stock_id}">
+                <td>${item.date}</td>
+                <td>${item.truck || '-'}</td>
+                <td>${item.account || '-'}</td>
+                <td>${item.product || '-'}</td>
+                <td>${item.quantity}</td>
+                <td><input type="number" class="form-control form-control-sm transport-km" value="${item.distance || 0}" step="0.1" min="0" onchange="calculateTransportRow(this)"></td>
+                <td><input type="number" class="form-control form-control-sm transport-rate" step="0.01" min="0" onchange="calculateTransportRow(this)"></td>
+                <td class="transport-total">₹ 0.00</td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+function calculateStorageRow(input) {
+    const row = input.closest('tr');
+    const qty = parseFloat(row.querySelector('.storage-qty').value) || 0;
+    const rate = parseFloat(row.querySelector('.storage-rate').value) || 0;
+    const total = qty * rate;
+    row.querySelector('.storage-total').textContent = '₹ ' + total.toFixed(2);
+    calculateWarehouseTotals();
+}
+
+function calculateTransportRow(input) {
+    const row = input.closest('tr');
+    const qtyCell = row.cells[4]; // QT is the 5th column (index 4)
+    const qty = parseFloat(qtyCell.textContent) || 0;
+    const km = parseFloat(row.querySelector('.transport-km').value) || 0;
+    const rate = parseFloat(row.querySelector('.transport-rate').value) || 0;
+    const total = qty * km * rate;
+    row.querySelector('.transport-total').textContent = '₹ ' + total.toFixed(2);
+    calculateWarehouseTotals();
+}
+
+function calculateWarehouseTotals() {
+    // Calculate storage total
+    let storageTotal = 0;
+    document.querySelectorAll('.storage-total').forEach(cell => {
+        const value = parseFloat(cell.textContent.replace('₹ ', '').replace(',', '')) || 0;
+        storageTotal += value;
+    });
+    document.getElementById('storageTotal').textContent = '₹ ' + storageTotal.toFixed(2);
+    
+    // Calculate transportation total
+    let transportTotal = 0;
+    document.querySelectorAll('.transport-total').forEach(cell => {
+        const value = parseFloat(cell.textContent.replace('₹ ', '').replace(',', '')) || 0;
+        transportTotal += value;
+    });
+    document.getElementById('transportTotal').textContent = '₹ ' + transportTotal.toFixed(2);
+    
+    // Calculate grand total
+    const grandTotal = storageTotal + transportTotal;
+    document.getElementById('warehouseGrandTotal').textContent = '₹ ' + grandTotal.toFixed(2);
+}
+
+function downloadRakeBillExcel() {
+    const rakeCode = document.getElementById('rakeSelect').value;
+    if (!rakeCode) {
+        alert('Please select a rake first');
+        return;
+    }
+    
+    // Collect transport data
+    const transportData = [];
+    document.querySelectorAll('#rakeTransportBody tr').forEach(row => {
+        if (row.querySelector('.transport-qty')) {
+            transportData.push({
+                dest_type: row.dataset.destType,
+                dest_name: row.cells[1].textContent,
+                quantity: parseFloat(row.querySelector('.transport-qty').value) || 0,
+                distance: parseFloat(row.querySelector('.transport-km').value) || 0,
+                rate: parseFloat(row.querySelector('.transport-rate').value) || 0,
+                total: parseFloat(row.querySelector('.transport-total-rake').textContent.replace('₹ ', '')) || 0
+            });
+        }
+    });
+    
+    // Collect handling data
+    const handlingData = [];
+    document.querySelectorAll('#rakeHandlingBody tr').forEach(row => {
+        handlingData.push({
+            situation: row.cells[0].textContent,
+            quantity: parseFloat(row.querySelector('.handling-qty').value) || 0,
+            rate: parseFloat(row.querySelector('.handling-rate').value) || 0,
+            total: parseFloat(row.querySelector('.handling-total').textContent.replace('₹ ', '')) || 0
+        });
+    });
+    
+    const totals = {
+        transport_total: parseFloat(document.getElementById('rakeTransportTotal').textContent.replace('₹ ', '')) || 0,
+        handling_total: parseFloat(document.getElementById('rakeHandlingTotal').textContent.replace('₹ ', '')) || 0,
+        grand_total: parseFloat(document.getElementById('rakeGrandTotal').textContent.replace('₹ ', '')) || 0
+    };
+    
+    // Send data to server for Excel generation
+    fetch('/admin/logistic-bill/download-rake-excel', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            rake_code: rakeCode,
+            transport_data: transportData,
+            handling_data: handlingData,
+            totals: totals
+        })
+    })
+    .then(response => response.blob())
+    .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'Rake_Bill_' + rakeCode + '.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+    })
+    .catch(err => {
+        console.error('Error downloading Excel:', err);
+        alert('Error downloading Excel file');
+    });
+}
+
+function downloadWarehouseBillExcel() {
+    const warehouseId = document.getElementById('warehouseSelect').value;
+    const warehouseName = document.getElementById('warehouseSelect').options[document.getElementById('warehouseSelect').selectedIndex].text;
+    
+    // Collect storage data
+    const storageData = [];
+    document.querySelectorAll('#storageBody tr').forEach(row => {
+        if (row.querySelector('.storage-qty')) {
+            storageData.push({
+                date: row.cells[0].textContent,
+                company: row.cells[1].textContent,
+                product: row.cells[2].textContent,
+                quantity: parseFloat(row.querySelector('.storage-qty').value) || 0,
+                rate: parseFloat(row.querySelector('.storage-rate').value) || 0,
+                total: parseFloat(row.querySelector('.storage-total').textContent.replace('₹ ', '')) || 0
+            });
+        }
+    });
+    
+    // Collect transport data
+    const transportData = [];
+    document.querySelectorAll('#transportBody tr').forEach(row => {
+        if (row.querySelector('.transport-km')) {
+            transportData.push({
+                date: row.cells[0].textContent,
+                truck: row.cells[1].textContent,
+                account: row.cells[2].textContent,
+                product: row.cells[3].textContent,
+                quantity: parseFloat(row.cells[4].textContent) || 0,
+                distance: parseFloat(row.querySelector('.transport-km').value) || 0,
+                rate: parseFloat(row.querySelector('.transport-rate').value) || 0,
+                total: parseFloat(row.querySelector('.transport-total').textContent.replace('₹ ', '')) || 0
+            });
+        }
+    });
+    
+    const totals = {
+        storage_total: parseFloat(document.getElementById('storageTotal').textContent.replace('₹ ', '')) || 0,
+        transport_total: parseFloat(document.getElementById('transportTotal').textContent.replace('₹ ', '')) || 0,
+        grand_total: parseFloat(document.getElementById('warehouseGrandTotal').textContent.replace('₹ ', '')) || 0
+    };
+    
+    // Send data to server for Excel generation
+    fetch('/admin/logistic-bill/download-warehouse-excel', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            warehouse_id: warehouseId,
+            warehouse_name: warehouseName,
+            storage_data: storageData,
+            transport_data: transportData,
+            totals: totals
+        })
+    })
+    .then(response => response.blob())
+    .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'Warehouse_Bill_' + (warehouseName || 'All') + '.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+    })
+    .catch(err => {
+        console.error('Error downloading Excel:', err);
+        alert('Error downloading Excel file');
+    });
+}
+
+// Load warehouse data on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadWarehouseData();
+    
+    // If any bill summary filters are applied, show bill summary section
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('company') || urlParams.has('rake') || urlParams.has('date_from') || urlParams.has('date_to')) {
+        showBillType('summary');
+    }
+    // Also check sessionStorage for view preference
+    const savedView = sessionStorage.getItem('logisticBillView');
+    if (savedView === 'summary') {
+        showBillType('summary');
+    }
+});
+</script>
+{% endblock %}

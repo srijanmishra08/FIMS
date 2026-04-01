@@ -1,0 +1,423 @@
+{% extends "base.html" %}
+
+{% block title %}All Loading Slips - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-file-text"></i> All Loading Slips</h2>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-header bg-light">
+            <h6 class="mb-0"><i class="bi bi-funnel"></i> Filters</h6>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-2">
+                    <label for="rakeFilter" class="form-label">Rake Code</label>
+                    <select class="form-select" id="rakeFilter">
+                        <option value="">All Rakes</option>
+                        {% for rake in rakes %}
+                        <option value="{{ rake[1] }}">{{ rake[1] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="truckFilter" class="form-label">Truck Number</label>
+                    <select class="form-select" id="truckFilter">
+                        <option value="">All Trucks</option>
+                        {% for truck in trucks %}
+                        <option value="{{ truck[1] }}">{{ truck[1] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="destinationFilter" class="form-label">Destination</label>
+                    <select class="form-select" id="destinationFilter">
+                        <option value="">All Destinations</option>
+                        {% for warehouse in warehouses %}
+                        <option value="{{ warehouse[1] }}">{{ warehouse[1] }} (Warehouse)</option>
+                        {% endfor %}
+                        {% for cgmf in cgmf_list %}
+                        <option value="{{ cgmf[1] }}">{{ cgmf[1] }} (CGMF)</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="accountFilter" class="form-label">Account</label>
+                    <select class="form-select" id="accountFilter">
+                        <option value="">All Accounts</option>
+                        <optgroup label="Dealers">
+                            {% for account in accounts if account[2] == 'Dealer' %}
+                            <option value="{{ account[1] }}">{{ account[1] }}</option>
+                            {% endfor %}
+                        </optgroup>
+                        <optgroup label="Retailers">
+                            {% for account in accounts if account[2] == 'Retailer' %}
+                            <option value="{{ account[1] }}">{{ account[1] }}</option>
+                            {% endfor %}
+                        </optgroup>
+                        <optgroup label="Warehouses">
+                            {% for warehouse in warehouses %}
+                            <option value="{{ warehouse[1] }}">{{ warehouse[1] }}</option>
+                            {% endfor %}
+                        </optgroup>
+                        <optgroup label="CGMF">
+                            {% for cgmf in cgmf_list %}
+                            <option value="{{ cgmf[1] }}">{{ cgmf[1] }}</option>
+                            {% endfor %}
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="searchInput" class="form-label">Search</label>
+                    <input type="text" id="searchInput" class="form-control" placeholder="Search...">
+                </div>
+            </div>
+            <div class="mt-3">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="clearFilters()">
+                    <i class="bi bi-x-circle"></i> Clear Filters
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped" id="loadingSlipsTable">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Slip ID</th>
+                            <th>Slip Number</th>
+                            <th>Rake Code</th>
+                            <th>Builty</th>
+                            <th>Loading Point</th>
+                            <th>Destination</th>
+                            <th>Account</th>
+                            <th>Goods</th>
+                            <th>Bags</th>
+                            <th>MT</th>
+                            <th>Truck</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for slip in loading_slips %}
+                        <tr data-rake="{{ slip[1] }}" data-truck="{{ slip[8] or '' }}" data-destination="{{ slip[4] or '' }}" data-account="{{ slip[18] or slip[19] or slip[20] or '' }}">
+                            <td>{{ slip[0] }}</td>
+                            <td><strong>{{ slip[2] }}</strong></td>
+                            <td>{{ slip[1] }}</td>
+                            <td>
+                                {% if slip[17] %}
+                                    <span class="badge bg-success">{{ slip[17] }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">No Builty</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ slip[3] }}</td>
+                            <td>{{ slip[4] if slip[4] else '-' }}</td>
+                            <td>
+                                {% if slip[18] %}
+                                    <span class="badge bg-info">{{ slip[18] }}</span>
+                                {% elif slip[19] %}
+                                    <span class="badge bg-warning text-dark">{{ slip[19] }}</span>
+                                {% elif slip[20] %}
+                                    <span class="badge bg-success">{{ slip[20] }}</span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ slip[12] }}</td>
+                            <td>{{ slip[6] }}</td>
+                            <td>{{ slip[7] }}</td>
+                            <td>{{ slip[8] or 'N/A' }}</td>
+                            <td>
+                                {% if slip[10] %}
+                                    <span class="badge bg-success">Builty Created</span>
+                                {% else %}
+                                    <span class="badge bg-warning">Pending</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ slip[11]|format_date if slip[11] else 'N/A' }}</td>
+                            <td>
+                                <a href="{{ url_for('admin_print_loading_slip', slip_id=slip[0]) }}" 
+                                   class="btn btn-sm btn-primary" target="_blank" title="Print">
+                                    <i class="bi bi-printer"></i>
+                                </a>
+                                <button type="button" class="btn btn-sm btn-warning ms-1" 
+                                        title="Edit Loading Slip"
+                                        onclick="openEditSlipModal({{ slip[0] }}, '{{ slip[4] }}', {{ slip[6] }}, {{ slip[7] }}, '{{ slip[12] }}', '{{ slip[11] if slip[11] else '' }}')">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-danger ms-1" 
+                                        title="Delete Loading Slip"
+                                        onclick="confirmDeleteSlip({{ slip[0] }}, '{{ slip[2] }}', {{ 'true' if slip[10] else 'false' }})">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {% if not loading_slips %}
+    <div class="alert alert-info mt-3">
+        <i class="bi bi-info-circle"></i> No loading slips found in the system.
+    </div>
+    {% endif %}
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteSlipModal" tabindex="-1" aria-labelledby="deleteSlipModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteSlipModalLabel"><i class="bi bi-exclamation-triangle"></i> Confirm Delete</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="deleteSlipForm" method="POST">
+                <div class="modal-body">
+                    <p>Are you sure you want to delete loading slip <strong id="slipNumberToDelete"></strong>?</p>
+                    <div class="alert alert-warning" id="builtyWarning" style="display: none;">
+                        <i class="bi bi-exclamation-triangle"></i> <strong>Warning:</strong> This loading slip has a linked builty attached to it.
+                    </div>
+                    <div class="form-check" id="deleteBuiltyCheck" style="display: none;">
+                        <input class="form-check-input" type="checkbox" name="delete_builty" value="true" id="deleteLinkedBuilty" required>
+                        <label class="form-check-label" for="deleteLinkedBuilty">
+                            <strong>Yes, also delete the linked builty</strong> (This will also remove warehouse stock entries)
+                        </label>
+                    </div>
+                    <div class="alert alert-danger mt-2" id="builtyRequiredWarning" style="display: none;">
+                        <small>You must check the box above to confirm builty deletion before proceeding.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger" id="deleteSlipBtn"><i class="bi bi-trash"></i> Delete</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Loading Slip Modal -->
+<div class="modal fade" id="editSlipModal" tabindex="-1" aria-labelledby="editSlipModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title" id="editSlipModalLabel"><i class="bi bi-pencil"></i> Edit Loading Slip</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="editSlipForm" method="POST">
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> Editing quantity will affect the overall stock calculation.
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_destination_type" class="form-label">Destination Type</label>
+                        <select class="form-select" id="edit_destination_type" onchange="toggleDestinationOptions()">
+                            <option value="account">Account (Dealer/Retailer)</option>
+                            <option value="warehouse">Warehouse</option>
+                            <option value="cgmf">CGMF (Markfed)</option>
+                            <option value="manual">Manual Entry</option>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="edit_account_select_div">
+                        <label for="edit_account_select" class="form-label">Select Account</label>
+                        <select class="form-select" id="edit_account_select" name="account_id">
+                            <option value="">-- Select Account --</option>
+                            {% for account in accounts %}
+                            <option value="{{ account[0] }}" data-name="{{ account[1] }}">{{ account[1] }} ({{ account[2] }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3" id="edit_warehouse_select_div" style="display: none;">
+                        <label for="edit_warehouse_select" class="form-label">Select Warehouse</label>
+                        <select class="form-select" id="edit_warehouse_select" name="warehouse_id">
+                            <option value="">-- Select Warehouse --</option>
+                            {% for warehouse in warehouses %}
+                            <option value="{{ warehouse[0] }}" data-name="{{ warehouse[1] }}">{{ warehouse[1] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3" id="edit_cgmf_select_div" style="display: none;">
+                        <label for="edit_cgmf_select" class="form-label">Select CGMF Society</label>
+                        <select class="form-select" id="edit_cgmf_select" name="cgmf_id">
+                            <option value="">-- Select CGMF --</option>
+                            {% for cgmf in cgmf_list %}
+                            <option value="{{ cgmf[0] }}" data-name="{{ cgmf[3] }}">{{ cgmf[3] }} - {{ cgmf[2] }} ({{ cgmf[1] }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3" id="edit_manual_dest_div" style="display: none;">
+                        <label for="edit_destination" class="form-label">Destination (Manual)</label>
+                        <input type="text" class="form-control" id="edit_destination" name="destination">
+                    </div>
+                    <input type="hidden" id="edit_destination_hidden" name="destination_final">
+                    <div class="mb-3">
+                        <label for="edit_quantity_bags" class="form-label">Quantity (Bags)</label>
+                        <input type="number" class="form-control" id="edit_quantity_bags" name="quantity_bags" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_quantity_mt" class="form-label">Quantity (MT)</label>
+                        <input type="number" step="0.01" class="form-control" id="edit_quantity_mt" name="quantity_mt" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_goods_name" class="form-label">Goods Name</label>
+                        <input type="text" class="form-control" id="edit_goods_name" name="goods_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_date" class="form-label">Date</label>
+                        <input type="datetime-local" class="form-control" id="edit_date" name="date">
+                        <small class="text-muted">Leave empty to keep current date</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning" onclick="setDestinationValue()"><i class="bi bi-save"></i> Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Filter functionality
+    function applyFilters() {
+        const rakeFilter = document.getElementById('rakeFilter').value;
+        const truckFilter = document.getElementById('truckFilter').value;
+        const destinationFilter = document.getElementById('destinationFilter').value;
+        const accountFilter = document.getElementById('accountFilter').value;
+        const searchText = document.getElementById('searchInput').value.toLowerCase();
+        
+        const table = document.getElementById('loadingSlipsTable');
+        const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+        
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const rake = row.dataset.rake || '';
+            const truck = row.dataset.truck || '';
+            const destination = row.dataset.destination || '';
+            const account = row.dataset.account || '';
+            const text = row.textContent.toLowerCase();
+            
+            const matchRake = !rakeFilter || rake === rakeFilter;
+            const matchTruck = !truckFilter || truck === truckFilter;
+            const matchDestination = !destinationFilter || destination.includes(destinationFilter);
+            const matchAccount = !accountFilter || account.includes(accountFilter);
+            const matchSearch = !searchText || text.includes(searchText);
+            
+            row.style.display = (matchRake && matchTruck && matchDestination && matchAccount && matchSearch) ? '' : 'none';
+        }
+    }
+    
+    function clearFilters() {
+        document.getElementById('rakeFilter').value = '';
+        document.getElementById('truckFilter').value = '';
+        document.getElementById('destinationFilter').value = '';
+        document.getElementById('accountFilter').value = '';
+        document.getElementById('searchInput').value = '';
+        applyFilters();
+    }
+    
+    // Add event listeners to filters
+    document.getElementById('rakeFilter').addEventListener('change', applyFilters);
+    document.getElementById('truckFilter').addEventListener('change', applyFilters);
+    document.getElementById('destinationFilter').addEventListener('change', applyFilters);
+    document.getElementById('accountFilter').addEventListener('change', applyFilters);
+    document.getElementById('searchInput').addEventListener('keyup', applyFilters);
+    
+    // Delete loading slip confirmation
+    function confirmDeleteSlip(slipId, slipNumber, hasBuilty) {
+        document.getElementById('slipNumberToDelete').textContent = slipNumber;
+        document.getElementById('deleteSlipForm').action = '/admin/delete-loading-slip/' + slipId;
+        
+        const builtyWarning = document.getElementById('builtyWarning');
+        const deleteBuiltyCheck = document.getElementById('deleteBuiltyCheck');
+        const builtyRequiredWarning = document.getElementById('builtyRequiredWarning');
+        const checkbox = document.getElementById('deleteLinkedBuilty');
+        
+        if (hasBuilty) {
+            builtyWarning.style.display = 'block';
+            deleteBuiltyCheck.style.display = 'block';
+            builtyRequiredWarning.style.display = 'block';
+            checkbox.checked = false;
+            checkbox.required = true;
+        } else {
+            builtyWarning.style.display = 'none';
+            deleteBuiltyCheck.style.display = 'none';
+            builtyRequiredWarning.style.display = 'none';
+            checkbox.required = false;
+        }
+        
+        new bootstrap.Modal(document.getElementById('deleteSlipModal')).show();
+    }
+    
+    // Edit loading slip modal
+    function openEditSlipModal(slipId, destination, bags, mt, goods, dateStr) {
+        document.getElementById('editSlipForm').action = '/admin/edit-loading-slip/' + slipId;
+        document.getElementById('edit_destination').value = destination;
+        document.getElementById('edit_quantity_bags').value = bags;
+        document.getElementById('edit_quantity_mt').value = mt;
+        document.getElementById('edit_goods_name').value = goods;
+        
+        // Set date field if provided (convert to datetime-local format)
+        const dateField = document.getElementById('edit_date');
+        if (dateStr && dateStr.length >= 16) {
+            // Convert from "2026-01-17 10:30:00" to "2026-01-17T10:30"
+            dateField.value = dateStr.replace(' ', 'T').substring(0, 16);
+        } else {
+            dateField.value = '';
+        }
+        
+        // Reset to manual entry by default with current destination
+        document.getElementById('edit_destination_type').value = 'manual';
+        toggleDestinationOptions();
+        
+        new bootstrap.Modal(document.getElementById('editSlipModal')).show();
+    }
+    
+    // Toggle destination options based on type
+    function toggleDestinationOptions() {
+        const type = document.getElementById('edit_destination_type').value;
+        document.getElementById('edit_account_select_div').style.display = type === 'account' ? 'block' : 'none';
+        document.getElementById('edit_warehouse_select_div').style.display = type === 'warehouse' ? 'block' : 'none';
+        document.getElementById('edit_cgmf_select_div').style.display = type === 'cgmf' ? 'block' : 'none';
+        document.getElementById('edit_manual_dest_div').style.display = type === 'manual' ? 'block' : 'none';
+        
+        // Clear selections
+        if (type !== 'account') document.getElementById('edit_account_select').value = '';
+        if (type !== 'warehouse') document.getElementById('edit_warehouse_select').value = '';
+        if (type !== 'cgmf') document.getElementById('edit_cgmf_select').value = '';
+    }
+    
+    // Set destination value before form submit
+    function setDestinationValue() {
+        const type = document.getElementById('edit_destination_type').value;
+        let destValue = '';
+        
+        if (type === 'account') {
+            const select = document.getElementById('edit_account_select');
+            destValue = select.options[select.selectedIndex]?.dataset.name || '';
+        } else if (type === 'warehouse') {
+            const select = document.getElementById('edit_warehouse_select');
+            destValue = select.options[select.selectedIndex]?.dataset.name || '';
+        } else if (type === 'cgmf') {
+            const select = document.getElementById('edit_cgmf_select');
+            destValue = select.options[select.selectedIndex]?.dataset.name || '';
+        } else {
+            destValue = document.getElementById('edit_destination').value;
+        }
+        
+        document.getElementById('edit_destination_hidden').value = destValue;
+    }
+</script>
+{% endblock %}
