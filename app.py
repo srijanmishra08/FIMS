@@ -4634,7 +4634,7 @@ def download_database():
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
-    db_path = os.path.join(os.path.dirname(__file__), 'fims.db')
+    db_path = db.db_name
     if os.path.exists(db_path):
         # Create backup filename with timestamp
         from datetime import datetime

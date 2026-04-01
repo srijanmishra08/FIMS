@@ -54,8 +54,6 @@ class Database:
     _initialized = False      # Track if DB schema has been initialized this instance
     
     def __init__(self, db_name='fims.db'):
-        self.db_name = db_name
-        
         # Check for Turso cloud database configuration
         self.turso_url = os.environ.get('TURSO_DATABASE_URL')
         self.turso_token = os.environ.get('TURSO_AUTH_TOKEN')
@@ -66,11 +64,23 @@ class Database:
             self.turso_url and 
             self.turso_token
         )
+
+        # Resolve SQLite path to a writable location in serverless environments.
+        if self.use_cloud:
+            self.db_name = db_name
+        else:
+            configured_path = os.environ.get('SQLITE_DB_PATH')
+            if configured_path:
+                self.db_name = configured_path
+            elif os.environ.get('VERCEL') == '1':
+                self.db_name = os.path.join('/tmp', os.path.basename(db_name))
+            else:
+                self.db_name = os.path.join(os.path.dirname(os.path.abspath(__file__)), db_name)
         
         if self.use_cloud:
             print("🌐 Using Turso Cloud Database")
         else:
-            print("💾 Using Local SQLite Database")
+            print(f"💾 Using Local SQLite Database: {self.db_name}")
     
     @classmethod
     def reset_cloud_connection(cls):
