@@ -5,3 +5,4 @@ reportlab==4.0.7
 openpyxl==3.1.2
 python-dateutil==2.8.2
 libsql-experimental==0.0.47
+python-dotenv==1.0.1

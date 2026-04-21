@@ -9,7 +9,10 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from urllib.parse import unquote
 from datetime import datetime, timedelta
 import os
+from dotenv import load_dotenv
 from database import Database
+
+load_dotenv()
 
 # Get the directory where app.py is located
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
